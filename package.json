@@ -1,0 +1,19 @@
+{
+  "name": "harpur-land-mapper-v5.5",
+  "version": "5.5.0",
+  "private": true,
+  "description": "Harpur cadastral mapper v5.5 with dynamic BhuNaksha overlay, selection pin lifecycle, full plot CRUD, Google Maps links, mobile UI and About page.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "express": "^5.1.0",
+    "proj4": "^2.11.0",
+    "sharp": "^0.33.5"
+  }
+}

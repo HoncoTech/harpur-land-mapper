@@ -1,0 +1,82 @@
+
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Harpur Land Mapper V5.5</title>
+<link rel="stylesheet" href="styles.css"/>
+<script src="https://cdn.jsdelivr.net/npm/proj4@2.15.0/dist/proj4.js"></script>
+</head>
+<body>
+<div id="app">
+  <aside>
+    <h2>Harpur Land Mapper V5.5</h2>
+    <div class="small">Dynamic cadastral overlay • Plot CRUD • Google Maps links</div>
+    <div class="version-row">
+      <span id="appVersion">Version 5.5</span>
+      <a href="/about.html" target="_blank" rel="noopener">About</a>
+    </div>
+
+    <label>Google Maps API key</label>
+    <div class="row">
+      <input id="apiKey" type="password" placeholder="Paste API key"/>
+      <button id="loadGoogle">Load</button>
+    </div>
+
+    <label class="check">
+      <input id="showNaksha" type="checkbox" checked/>
+      Show BhuNaksha sheet
+    </label>
+
+    <label>BhuNaksha opacity <span id="opacityValue">90%</span></label>
+    <input id="opacity" type="range" min="0" max="100" value="90"/>
+
+    <div class="buttons">
+      <button id="fitSheet">Fit BhuNaksha sheet</button>
+      <button id="reloadSheet">Refresh now</button>
+    </div>
+
+    <a id="rawImageLink" href="/api/bhunaksha-sheet.png" target="_blank">Open raw full-sheet PNG</a>
+
+    <hr/>
+
+    <h3>Selected plot</h3>
+    <div id="status">Load the map, zoom the BhuNaksha image, read a plot number, then click inside that plot.</div>
+
+    <div id="plotForm" class="hidden">
+      <div class="kv"><b>Plot</b><span id="plotNo"></span></div>
+      <div class="kv"><b>PNIU</b><span id="pniu"></span></div>
+      <div class="kv"><b>Plot ID</b><span id="plotId" class="mono"></span></div>
+      <div class="kv"><b>Native XY</b><span id="nativeXY" class="mono"></span></div>
+      <div class="kv"><b>Center</b><span id="centerLatLng" class="mono"></span></div>
+      <a id="googleMapLink" class="map-link hidden" target="_blank" rel="noopener">Open plot center in Google Maps</a>
+
+      <label>Owner / family</label>
+      <input id="owner" placeholder="Roy family"/>
+
+      <label>Local name</label>
+      <input id="localName" placeholder="Tari / Pari / etc."/>
+
+      <label>Notes</label>
+      <textarea id="notes" rows="3"></textarea>
+
+      <button id="reconstruct" class="primary">Reconstruct polygon</button>
+      <button id="savePlot" class="primary">Save / Update Plot</button>
+      <button id="deletePlot" class="danger">Delete Plot</button>
+    </div>
+
+    <hr/>
+    <h3>Saved plots</h3>
+    <input id="filter" placeholder="Search plot / owner / local name"/>
+    <div id="savedPlots"></div>
+  </aside>
+
+  <main>
+    <div id="map"></div>
+    <div class="map-badge">Click parcel → pin appears → verify plot → save/update/delete</div>
+  </main>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
