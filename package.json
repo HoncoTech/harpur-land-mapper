@@ -1,14 +1,14 @@
 {
-  "name": "harpur-land-mapper-v5.5",
-  "version": "5.5.0",
+  "name": "harpur-land-mapper-v5.6.1-sheet2-fixed",
+  "version": "5.6.1",
   "private": true,
-  "description": "Harpur cadastral mapper v5.5 with dynamic BhuNaksha overlay, selection pin lifecycle, full plot CRUD, Google Maps links, mobile UI and About page.",
+  "description": "Harpur Land Mapper v5.6.1 with exact CS Sheet 02 BhuNaksha extent/WMS support.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "engines": {
-    "node": ">=18"
+    "node": "22.22.0"
   },
   "dependencies": {
     "better-sqlite3": "^11.7.0",

@@ -1,58 +1,31 @@
-# Harpur Land Mapper — Version 5.5
+# Harpur Land Mapper — Version 5.6.1
 
-## Version 5.5
+## Sheet 02 fix
 
-This release consolidates the working cadastral-map workflow and the agreed selection-pin lifecycle.
+V5.6.1 uses the exact BhuNaksha values captured from the official viewer for Harpur CS Sheet 02.
 
-### Pin lifecycle
-
-- App/browser load → no pin
-- Click a parcel → pin appears at the exact clicked location
-- Plot lookup succeeds → pin label becomes the plot number
-- Pan / zoom / cadastral PNG refresh → pin remains
-- Save / Update → pin remains
-- Click another parcel → old pin is removed and new pin appears
-- Select saved plot → pin moves to the saved plot center
-- Delete → pin is removed and selection is cleared
-
-### Plot database operations
-
-- **Save / Update Plot** creates or updates the record.
-- **Delete Plot** asks for confirmation, then removes only the local application record.
-- BhuNaksha itself is never modified.
-
-### About page
-
-Open:
+Sheet 02 native extent:
 
 ```text
-http://localhost:3000/about.html
+EPSG:32645
+xmin 190449.736065251
+ymin 2805551.8911005286
+xmax 192577.99499258207
+ymax 2806753.2243631342
 ```
 
-The About page shows the application version, target cadastral area, major features and usage disclaimer.
-
-### Other features
-
-- Google Satellite map
-- dynamic BhuNaksha PNG refresh after pan/zoom
-- plot lookup through BhuNaksha
-- owner / family, local name and notes
-- Google Maps center link
-- GeoJSON polygon reconstruction
-- SQLite persistence
-- mobile / tablet / desktop layout
-- deployment environment variables
-
-## Run locally
-
-```bash
-npm install
-npm start
-```
-
-Open:
+Sheet 02 exact working WMS display BBOX:
 
 ```text
-http://localhost:3000
+189720.5811856323,2804925.385129284,193307.14987220077,2807379.730334379
 ```
-# harpur-land-mapper
+
+GIS code:
+
+```text
+CS30010202301990602
+```
+
+The earlier 5.6 error came from assuming `getVVVVExtentGeoref` returned a nested `nativeExtent` object. For Sheet 02 the captured response is flat (`xmin`, `ymin`, `xmax`, `ymax`). V5.6.1 no longer derives Sheet 02's display BBOX; it uses the exact official viewer request.
+
+Also pins Node to 22.22.0 for Render compatibility with `better-sqlite3`.

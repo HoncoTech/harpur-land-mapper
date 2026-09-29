@@ -13,23 +13,46 @@ proj4.defs('EPSG:32645', '+proj=utm +zone=45 +datum=WGS84 +units=m +no_defs +typ
 
 // Harpur CS Sheet 01 config.
 // We keep the exact known-working BhuNaksha request model.
-const CS1 = {
-  key: 'CS1',
-  survey: 'CS',
-  sheet: '01',
-  state: '10',
-  gisCode: 'CS30010202301990601',
-  levels: '30,01,02,0230,CS,06,01,',
-  wmsRequestCRS: 'EPSG:3857',
-  width: 1502,
-  height: 1028,
-  imageBBox: {
-    xmin: 189758.96895288327,
-    ymin: 2806268.129076574,
-    xmax: 193345.53763945174,
-    ymax: 2808722.4742816687
+const SHEETS = {
+  '01': {
+    key: 'CS1', survey: 'CS', sheet: '01', state: '10',
+    gisCode: 'CS30010202301990601',
+    levels: '30,01,02,0230,CS,06,01,',
+    wmsRequestCRS: 'EPSG:3857', width: 1502, height: 1028,
+    imageBBox: {
+      xmin: 189758.96895288327,
+      ymin: 2806268.129076574,
+      xmax: 193345.53763945174,
+      ymax: 2808722.4742816687
+    }
+  },
+  '02': {
+    key: 'CS2', survey: 'CS', sheet: '02', state: '10',
+    gisCode: 'CS30010202301990602',
+    levels: '30,01,02,0230,CS,06,02,',
+    wmsRequestCRS: 'EPSG:3857', width: 1502, height: 1028,
+    imageBBox: {
+      xmin: 189720.5811856323,
+      ymin: 2804925.385129284,
+      xmax: 193307.14987220077,
+      ymax: 2807379.730334379
+    },
+    nativeExtent: {
+      epsg: 'EPSG:32645',
+      xmin: 190449.736065251,
+      ymin: 2805551.8911005286,
+      xmax: 192577.99499258207,
+      ymax: 2806753.2243631342
+    }
   }
 };
+function getSheetConfig(sheet='01'){
+  const key=String(sheet||'01').padStart(2,'0');
+  const cfg=SHEETS[key];
+  if(!cfg) throw new Error(`Unsupported sheet ${sheet}`);
+  return cfg;
+}
+
 
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'harpur.sqlite');
 const db = new Database(DB_PATH);
@@ -81,6 +104,12 @@ function clamp(n, lo, hi) {
   return Math.max(lo, Math.min(hi, n));
 }
 
+async function ensureSheetBBox(cfg){
+  // Exact viewer BBOX values are known for both Harpur CS sheets.
+  if(!cfg.imageBBox) throw new Error(`Missing BhuNaksha image BBOX for sheet ${cfg.sheet}`);
+  return cfg.imageBBox;
+}
+
 function nativeBBoxToLatLngBounds(b) {
   const sw = proj4('EPSG:32645', 'EPSG:4326', [b.xmin, b.ymin]);
   const ne = proj4('EPSG:32645', 'EPSG:4326', [b.xmax, b.ymax]);
@@ -103,7 +132,7 @@ function nativeBBoxToLatLngBounds(b) {
   };
 }
 
-function buildVillageMapUrl({xmin, ymin, xmax, ymax, width, height}) {
+function buildVillageMapUrl(cfg, {xmin, ymin, xmax, ymax, width, height}) {
   const p = new URLSearchParams({
     SERVICE: 'WMS',
     VERSION: '1.3.0',
@@ -112,10 +141,10 @@ function buildVillageMapUrl({xmin, ymin, xmax, ymax, width, height}) {
     TRANSPARENT: 'true',
     LAYERS: 'VILLAGE_MAP',
     transparent: 'true',
-    state: CS1.state,
-    gis_code: CS1.gisCode,
+    state: cfg.state,
+    gis_code: cfg.gisCode,
     overlay_codes: '',
-    CRS: CS1.wmsRequestCRS,
+    CRS: cfg.wmsRequestCRS,
     STYLES: 'VILLAGE_MAP',
     WIDTH: String(width),
     HEIGHT: String(height),
@@ -143,21 +172,20 @@ async function proxyPng(url, res, logLabel='BhuNaksha') {
   res.send(buf);
 }
 
-app.get('/api/config', (req,res) => {
-  res.json({
-    ...CS1,
-    googleBounds: nativeBBoxToLatLngBounds(CS1.imageBBox),
-    googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY || ''
-  });
+app.get('/api/config', async (req,res) => {
+  try{
+    const cfg=getSheetConfig(req.query.sheet||'01'); await ensureSheetBBox(cfg);
+    res.json({...cfg,availableSheets:Object.keys(SHEETS),googleBounds:nativeBBoxToLatLngBounds(cfg.imageBBox),googleMapsApiKey:process.env.GOOGLE_MAPS_API_KEY||''});
+  }catch(err){res.status(400).json({error:err.message});}
 });
 
 app.get('/api/about', (req,res) => {
   res.json({
     name: 'Harpur Land Mapper',
-    version: '5.5.0',
-    release: '5.5',
+    version: '5.6.1',
+    release: '5.6.1',
     survey: 'CS',
-    sheet: '01',
+    sheet: '01 / 02',
     village: 'Harpur(199)',
     circle: 'Rajpur',
     district: 'Buxar',
@@ -178,21 +206,11 @@ app.get('/api/about', (req,res) => {
 
 // Exact full-sheet image you captured in DevTools.
 app.get('/api/bhunaksha-sheet.png', async (req,res) => {
-  try {
-    const url = buildVillageMapUrl({
-      xmin: CS1.imageBBox.xmin,
-      ymin: CS1.imageBBox.ymin,
-      xmax: CS1.imageBBox.xmax,
-      ymax: CS1.imageBBox.ymax,
-      width: CS1.width,
-      height: CS1.height
-    });
-    console.log('BhuNaksha full sheet:', url);
-    await proxyPng(url, res, 'Full sheet');
-  } catch(err) {
-    console.error('Full sheet error:', err);
-    res.status(502).send(err.message);
-  }
+  try{
+    const cfg=getSheetConfig(req.query.sheet||'01'); await ensureSheetBBox(cfg);
+    const b=cfg.imageBBox; const url=buildVillageMapUrl(cfg,{xmin:b.xmin,ymin:b.ymin,xmax:b.xmax,ymax:b.ymax,width:cfg.width,height:cfg.height});
+    console.log(`BhuNaksha full sheet ${cfg.sheet}:`,url); await proxyPng(url,res,`Full sheet ${cfg.sheet}`);
+  }catch(err){console.error('Full sheet error:',err);res.status(502).send(err.message);}
 });
 
 // Dynamic viewport-aligned cadastral PNG.
@@ -200,6 +218,7 @@ app.get('/api/bhunaksha-sheet.png', async (req,res) => {
 // The app refreshes this whenever map zoom/pan settles (idle).
 app.get('/api/viewport-overlay.png', async (req,res) => {
   try {
+    const cfg=getSheetConfig(req.query.sheet||'01'); await ensureSheetBBox(cfg);
     const xmin = Number(req.query.xmin);
     const ymin = Number(req.query.ymin);
     const xmax = Number(req.query.xmax);
@@ -214,7 +233,7 @@ app.get('/api/viewport-overlay.png', async (req,res) => {
     width = clamp(Math.round(width), 256, 4096);
     height = clamp(Math.round(height), 256, 4096);
 
-    const url = buildVillageMapUrl({xmin, ymin, xmax, ymax, width, height});
+    const url = buildVillageMapUrl(cfg,{xmin, ymin, xmax, ymax, width, height});
     console.log('BhuNaksha viewport overlay:', url);
     await proxyPng(url, res, 'Viewport overlay');
   } catch(err) {
@@ -257,18 +276,19 @@ async function fetchGet(url, params) {
 
 app.get('/api/plot-at-xy', async (req,res)=>{
   try {
+    const cfg=getSheetConfig(req.query.sheet||'01');
     const x=req.query.x,y=req.query.y;
     if(!x||!y) return res.status(400).json({error:'x and y required'});
 
     const hit=await fetchForm(`${BHU}/rest/MapInfo/getPlotAtXY`,{
-      state:CS1.state,giscode:CS1.gisCode,x,y
+      state:cfg.state,giscode:cfg.gisCode,x,y
     });
 
     const scalar=await fetchGet(`${BHU}/ScalarDatahandler`,{
-      OP:'4',state:CS1.state,levels:CS1.levels,x,y
+      OP:'4',state:cfg.state,levels:cfg.levels,x,y
     });
 
-    res.json({hit,scalar,config:CS1});
+    res.json({hit,scalar,config:cfg});
   } catch(err) {
     console.error('plot-at-xy:',err);
     res.status(502).json({error:err.message});
@@ -333,12 +353,12 @@ function pixelToNative(px,py,bbox,w,h){
   ];
 }
 
-async function reconstructPolygon({plotId,bbox}){
+async function reconstructPolygon({plotId,bbox,cfg}){
   const width=1600,height=2000;
   const p=new URLSearchParams({
     SERVICE:'WMS',VERSION:'1.3.0',REQUEST:'GetMap',
     FORMAT:'image/png',TRANSPARENT:'true',transparent:'true',
-    LAYERS:'PLOT_LIST',state:CS1.state,gis_code:CS1.gisCode,
+    LAYERS:'PLOT_LIST',state:cfg.state,gis_code:cfg.gisCode,
     plot_id:plotId,STYLES:'PLOT_SELECTION',CRS:'EPSG:32645',
     WIDTH:String(width),HEIGHT:String(height),
     BBOX:`${bbox.xmin},${bbox.ymin},${bbox.xmax},${bbox.ymax}`
@@ -366,14 +386,15 @@ async function reconstructPolygon({plotId,bbox}){
 app.post('/api/reconstruct',async(req,res)=>{
   try{
     const p=req.body||{};
+    const cfg=getSheetConfig(p.sheet||'01');
     if(!p.plot_id||p.xmin==null||p.ymin==null||p.xmax==null||p.ymax==null)
       return res.status(400).json({error:'plot_id and bbox required'});
-    const geometry=await reconstructPolygon({plotId:p.plot_id,bbox:paddedBBox(p,2)});
+    const geometry=await reconstructPolygon({plotId:p.plot_id,bbox:paddedBBox(p,2),cfg});
     res.json({
       type:'Feature',
       properties:{
         plotNo:String(p.plot_no||''),owner:p.owner||'',localName:p.local_name||'',
-        survey:'CS',sheet:'01',gisCode:CS1.gisCode,plotId:p.plot_id,pniu:p.pniu||'',
+        survey:'CS',sheet:cfg.sheet,gisCode:cfg.gisCode,plotId:p.plot_id,pniu:p.pniu||'',
         source:'Reconstructed from BhuNaksha WMS PLOT_LIST raster'
       },
       geometry
@@ -388,8 +409,9 @@ app.get('/api/plots',(req,res)=>{
 
 app.post('/api/plots',(req,res)=>{
   const p=req.body||{};
+  const cfg=getSheetConfig(p.sheet||'01');
   const record={
-    survey:'CS',sheet:'01',gis_code:CS1.gisCode,levels:CS1.levels,
+    survey:'CS',sheet:cfg.sheet,gis_code:cfg.gisCode,levels:cfg.levels,
     plot_no:p.plot_no||'',plot_id:p.plot_id||'',pniu:p.pniu||'',
     seed_x:p.seed_x??null,seed_y:p.seed_y??null,
     xmin:p.xmin??null,ymin:p.ymin??null,xmax:p.xmax??null,ymax:p.ymax??null,
@@ -420,7 +442,7 @@ app.post('/api/plots',(req,res)=>{
   `).run(record);
 
   const r=db.prepare('SELECT * FROM plots WHERE survey=? AND sheet=? AND plot_no=?')
-    .get('CS','01',record.plot_no);
+    .get('CS',record.sheet,record.plot_no);
   res.json({...r,geometry:r.geometry_geojson?JSON.parse(r.geometry_geojson):null});
 });
 
@@ -452,4 +474,4 @@ app.delete('/api/plots/:survey/:sheet/:plotNo', (req,res) => {
   }
 });
 
-app.listen(PORT,()=>console.log(`Harpur Land Mapper V5.5: http://localhost:${PORT}`));
+app.listen(PORT,()=>console.log(`Harpur Land Mapper V5.6.1: http://localhost:${PORT}`));

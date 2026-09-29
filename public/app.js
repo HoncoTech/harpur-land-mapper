@@ -2,6 +2,7 @@
 proj4.defs('EPSG:32645','+proj=utm +zone=45 +datum=WGS84 +units=m +no_defs +type=crs');
 
 let map, config;
+let currentSheet = '01';
 let selectionMarker = null;
 let overlayView = null;
 let selectedPlot = null, selectedPolygon = null;
@@ -89,7 +90,7 @@ function createBhuNakshaOverlayClass(){
 let BhuNakshaImageOverlay = null;
 
 async function loadConfig(){
-  const r = await fetch('/api/config');
+  const r = await fetch(`/api/config?sheet=${encodeURIComponent(currentSheet)}`);
   const d = await r.json();
   if(!r.ok) throw new Error(d.error || 'Could not load config');
   config = d;
@@ -97,6 +98,19 @@ async function loadConfig(){
     $('apiKey').value = d.googleMapsApiKey;
   }
   return d;
+}
+
+function updateRawImageLink(){
+  const a=$('rawImageLink'); if(a) a.href=`/api/bhunaksha-sheet.png?sheet=${encodeURIComponent(currentSheet)}`;
+}
+async function switchSheet(sheet){
+  currentSheet=String(sheet||'01').padStart(2,'0'); localStorage.setItem('harpurSheet',currentSheet);
+  clearSelectionPin(); clearSelectedPolygon(); selectedPlot=null; $('plotForm').classList.add('hidden'); lastOverlaySignature='';
+  if(overlayView){overlayView.setMap(null);overlayView=null;}
+  $('status').textContent=`Loading CS Sheet ${currentSheet}...`;
+  await loadConfig(); updateRawImageLink();
+  if(map){fitSheet();scheduleViewportRefresh(true);redrawSaved();}
+  $('status').textContent=`CS Sheet ${currentSheet} loaded. Zoom and click a parcel.`;
 }
 
 function fitSheet(){
@@ -200,6 +214,7 @@ function refreshViewportOverlay({force=false} = {}){
     ymax: bbox.ymax,
     width: size.width,
     height: size.height,
+    sheet: currentSheet,
     t: Date.now()
   });
 
@@ -271,7 +286,7 @@ async function lookupPlot(latLng){
   placeSelectionPin(latLng);
   const [x,y] = proj4('EPSG:4326','EPSG:32645',[latLng.lng(),latLng.lat()]);
   $('status').textContent = 'Identifying BhuNaksha plot...';
-  const q = new URLSearchParams({x:String(x),y:String(y)});
+  const q = new URLSearchParams({x:String(x),y:String(y),sheet:currentSheet});
   const r = await fetch(`/api/plot-at-xy?${q.toString()}`);
   const data = await r.json();
   if(!r.ok) throw new Error(data.error || 'Plot lookup failed');
@@ -279,7 +294,7 @@ async function lookupPlot(latLng){
   if(!s || s.has_data !== 'Y') throw new Error('No BhuNaksha plot found at this click.');
 
   selectedPlot = {
-    survey:'CS',sheet:'01',state:'10',
+    survey:'CS',sheet:currentSheet,state:'10',
     gis_code:config.gisCode,levels:config.levels,
     plot_no:String(s.plotNo || data.hit?.kide || ''),
     plot_id:String(s.ID || data.hit?.id || ''),
@@ -322,7 +337,7 @@ function showSelected(){
   gLink.href = p.google_map_url || googleMapUrl(Number(centerLat), Number(centerLng));
   gLink.classList.remove('hidden');
 
-  const m = saved.find(x => String(x.plot_no) === String(p.plot_no) && x.survey === 'CS' && x.sheet === '01');
+  const m = saved.find(x => String(x.plot_no) === String(p.plot_no) && x.survey === 'CS' && x.sheet === p.sheet);
   $('deletePlot').disabled = !m;
   $('owner').value = m?.owner || '';
   $('localName').value = m?.local_name || '';
@@ -456,11 +471,12 @@ function renderSaved(){
       el.className = 'saved';
       el.innerHTML = `<div class="saved-title">Plot ${p.plot_no}</div>
       <div class="saved-sub">${p.owner || 'No owner'}${p.local_name ? ' • ' + p.local_name : ''}${p.geometry ? ' • polygon saved' : ''}${p.google_map_url ? ' • Google link' : ''}</div>`;
-      el.onclick = () => selectSaved(p);
+      el.onclick = () => selectSaved(p).catch(err=>alert(err.message));
       box.appendChild(el);
     });
 }
-function selectSaved(p){
+async function selectSaved(p){
+  if(p.sheet && p.sheet!==currentSheet){$('sheetSelect').value=p.sheet;await switchSheet(p.sheet);}
   selectedPlot = {
     survey:p.survey,sheet:p.sheet,state:'10',gis_code:p.gis_code,levels:p.levels,
     plot_no:p.plot_no,plot_id:p.plot_id,pniu:p.pniu,seed_x:p.seed_x,seed_y:p.seed_y,
@@ -505,7 +521,8 @@ async function loadGoogleMaps(){
 
 window.initMap = async function(){
   try{
-    await loadConfig();
+    currentSheet=localStorage.getItem('harpurSheet')||'01'; $('sheetSelect').value=currentSheet;
+    await loadConfig(); updateRawImageLink();
     map = new google.maps.Map($('map'),{
       center:{lat:25.3501,lng:83.9334},
       zoom:15,
@@ -535,6 +552,7 @@ $('loadGoogle').onclick = loadGoogleMaps;
 $('fitSheet').onclick = () => { fitSheet(); scheduleViewportRefresh(true); };
 $('reloadSheet').onclick = () => scheduleViewportRefresh(true);
 $('showNaksha').onchange = () => scheduleViewportRefresh(true);
+$('sheetSelect').onchange = e => switchSheet(e.target.value).catch(err=>{ $('status').textContent=err.message; alert(err.message); });
 $('opacity').oninput = e => {
   $('opacityValue').textContent = `${e.target.value}%`;
   overlayView?.setOpacity(Number(e.target.value) / 100);
@@ -544,6 +562,7 @@ $('savePlot').onclick = () => savePlot().catch(err=>alert(err.message));
 $('deletePlot').onclick = () => deletePlot().catch(err=>alert(err.message));
 $('filter').oninput = renderSaved;
 $('apiKey').value = localStorage.getItem('harpurGoogleKey') || '';
+currentSheet=localStorage.getItem('harpurSheet')||'01'; $('sheetSelect').value=currentSheet; updateRawImageLink();
 loadSaved().catch(console.error);
 
 

@@ -4,17 +4,17 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Harpur Land Mapper V5.5</title>
+<title>Harpur Land Mapper V5.6.1</title>
 <link rel="stylesheet" href="styles.css"/>
 <script src="https://cdn.jsdelivr.net/npm/proj4@2.15.0/dist/proj4.js"></script>
 </head>
 <body>
 <div id="app">
   <aside>
-    <h2>Harpur Land Mapper V5.5</h2>
+    <h2>Harpur Land Mapper V5.6.1</h2>
     <div class="small">Dynamic cadastral overlay • Plot CRUD • Google Maps links</div>
     <div class="version-row">
-      <span id="appVersion">Version 5.5</span>
+      <span id="appVersion">Version 5.6.1</span>
       <a href="/about.html" target="_blank" rel="noopener">About</a>
     </div>
 
@@ -23,6 +23,12 @@
       <input id="apiKey" type="password" placeholder="Paste API key"/>
       <button id="loadGoogle">Load</button>
     </div>
+
+    <label>CS Map Sheet</label>
+    <select id="sheetSelect">
+      <option value="01">Sheet 01</option>
+      <option value="02">Sheet 02</option>
+    </select>
 
     <label class="check">
       <input id="showNaksha" type="checkbox" checked/>
