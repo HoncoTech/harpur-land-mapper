@@ -1,8 +1,8 @@
 {
-  "name": "harpur-land-mapper-v6.1.1-bbox-visible-hybrid",
-  "version": "6.1.1",
+  "name": "harpur-land-mapper-v6.5-boxes-default-on",
+  "version": "6.5.0",
   "private": true,
-  "description": "Harpur Land Mapper v6.1.1 with highly visible saved plot BBox and hybrid satellite+labels default.",
+  "description": "Mobile Saved Plots with Show Boxes enabled by default and 10% fill opacity.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

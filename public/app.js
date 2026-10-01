@@ -14,6 +14,13 @@ let activeSavedPlot = null;
 let selectedBBoxPolygon = null;
 let allBBoxPolygons = new Map();
 
+// Mobile Saved Plots state
+let mobileSelectedPlotIds = new Set();
+let mobileToolbarTimer = null;
+let mobileDrawerOpen = false;
+let mobileBoxesEnabled = true;
+let mobileBBoxFillOpacity = 0.10;
+
 // Add Plot state
 let addMap = null;
 let addConfig = null;
@@ -37,8 +44,16 @@ function setView(view){
   setTimeout(() => {
     if(view === 'saved' && savedMap){
       google.maps.event.trigger(savedMap,'resize');
-      if(activeSavedPlot) focusSavedPlot(activeSavedPlot, false);
-      else fitAllSavedPlots();
+      if(isMobileSavedMode()){
+        ensureAllMobilePlotsSelected();
+        updateMobileSelectedVisibility();
+        if(activeSavedPlot) focusSavedPlot(activeSavedPlot, false);
+        else fitMobileSelectedPlots();
+        showMobileToolbar(true);
+      }else{
+        if(activeSavedPlot) focusSavedPlot(activeSavedPlot, false);
+        else fitAllSavedPlots();
+      }
     }
     if(view === 'add' && addMap){
       google.maps.event.trigger(addMap,'resize');
@@ -126,30 +141,335 @@ window.initGoogleMaps = async function(){
   await loadAddSheetConfig(currentSheet);
 };
 
+
+function isMobileSavedMode(){
+  return window.matchMedia('(max-width: 900px)').matches;
+}
+
+function showMobileToolbar(autoHide=true){
+  if(!isMobileSavedMode() || mobileDrawerOpen) return;
+  const bar=$('mobileSavedToolbar');
+  if(!bar) return;
+  bar.classList.remove('hidden','toolbar-hidden');
+  clearTimeout(mobileToolbarTimer);
+  if(autoHide){
+    mobileToolbarTimer=setTimeout(()=>{
+      if(!mobileDrawerOpen && !$('mobileBoxesPanel')?.classList.contains('hidden')===false){
+        bar.classList.add('toolbar-hidden');
+      }else if(!mobileDrawerOpen && $('mobileBoxesPanel')?.classList.contains('hidden')){
+        bar.classList.add('toolbar-hidden');
+      }
+    },5000);
+  }
+}
+
+function restartMobileToolbarTimer(){
+  showMobileToolbar(true);
+}
+
+function hideMobileToolbarImmediately(){
+  if(!isMobileSavedMode()) return;
+  clearTimeout(mobileToolbarTimer);
+  $('mobileSavedToolbar')?.classList.add('toolbar-hidden');
+}
+
+function openMobilePlotsDrawer(){
+  if(!isMobileSavedMode()) return;
+  mobileDrawerOpen=true;
+  clearTimeout(mobileToolbarTimer);
+  hideMobileBoxesPanel();
+  hideMobilePlotPopup();
+  renderMobileSavedList();
+  $('mobilePlotsDrawer')?.classList.add('open');
+  $('mobileSavedToolbar')?.classList.add('toolbar-hidden');
+}
+
+function closeMobilePlotsDrawer(){
+  mobileDrawerOpen=false;
+  $('mobilePlotsDrawer')?.classList.remove('open');
+
+  // Wait for the full-screen plot list close animation to finish, then
+  // force Google Maps to recalculate its viewport and redraw selected pins.
+  setTimeout(()=>{
+    if(!savedMap) return;
+
+    google.maps.event.trigger(savedMap,'resize');
+    updateMobileSelectedVisibility();
+
+    if(activeSavedPlot && mobileSelectedPlotIds.has(activeSavedPlot.id) && validCenter(activeSavedPlot)){
+      savedMap.panTo({
+        lat:Number(activeSavedPlot.center_lat),
+        lng:Number(activeSavedPlot.center_lng)
+      });
+      showSelectedBBox(activeSavedPlot);
+    }else{
+      fitMobileSelectedPlots();
+    }
+
+    showMobileToolbar(true);
+  },260);
+}
+
+function filteredMobilePlots(){
+  const q=($('mobileSavedSearch')?.value||'').trim().toLowerCase();
+  const sheet=$('mobileSheetFilter')?.value||'';
+  const owner=$('mobileOwnerFilter')?.value||'';
+
+  return savedPlots.filter(p=>{
+    if(sheet && String(p.sheet)!==sheet) return false;
+    if(owner && (p.owner||'')!==owner) return false;
+    if(q){
+      const hay=`${p.plot_no} ${p.owner||''} ${p.local_name||''} ${p.notes||''}`.toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  }).sort((a,b)=>{
+    const an=Number(a.plot_no),bn=Number(b.plot_no);
+    if(Number.isFinite(an)&&Number.isFinite(bn)) return an-bn;
+    return String(a.plot_no).localeCompare(String(b.plot_no));
+  });
+}
+
+function resetMobileSelectionToAll(){
+  mobileSelectedPlotIds.clear();
+  savedPlots.filter(validCenter).forEach(p=>mobileSelectedPlotIds.add(p.id));
+}
+
+function ensureAllMobilePlotsSelected(){
+  if(savedPlots.length && mobileSelectedPlotIds.size===0){
+    resetMobileSelectionToAll();
+  }
+}
+
+function syncMobileOwnerFilter(){
+  const select=$('mobileOwnerFilter');
+  if(!select) return;
+  const current=select.value;
+  const owners=[...new Set(savedPlots.map(p=>(p.owner||'').trim()).filter(Boolean))]
+    .sort((a,b)=>a.localeCompare(b));
+  select.innerHTML='<option value="">All owners</option>';
+  owners.forEach(owner=>{
+    const opt=document.createElement('option');
+    opt.value=owner;
+    opt.textContent=owner;
+    select.appendChild(opt);
+  });
+  select.value=owners.includes(current)?current:'';
+}
+
+function renderMobileSavedList(){
+  const box=$('mobileSavedList');
+  if(!box) return;
+
+  syncMobileOwnerFilter();
+  const rows=filteredMobilePlots();
+
+  $('mobileDrawerCount').textContent=`${rows.length} of ${savedPlots.length} plots`;
+  $('mobileSelectAll').checked=rows.length>0 && rows.every(p=>mobileSelectedPlotIds.has(p.id));
+  $('mobileSelectedCount').textContent=`${mobileSelectedPlotIds.size} selected`;
+
+  box.innerHTML='';
+  rows.forEach(p=>{
+    const row=document.createElement('div');
+    row.className='mobile-plot-row'+(activeSavedPlot?.id===p.id?' active':'');
+
+    const cb=document.createElement('input');
+    cb.type='checkbox';
+    cb.checked=mobileSelectedPlotIds.has(p.id);
+    cb.setAttribute('aria-label',`Select Plot ${p.plot_no}`);
+    cb.onclick=e=>e.stopPropagation();
+    cb.onchange=()=>{
+      if(cb.checked) mobileSelectedPlotIds.add(p.id);
+      else mobileSelectedPlotIds.delete(p.id);
+      updateMobileSelectedVisibility();
+      renderMobileSavedList();
+    };
+
+    const main=document.createElement('div');
+    main.className='mobile-row-main';
+    main.innerHTML=`<div class="mobile-row-title">Plot ${escapeHtml(p.plot_no)}</div>
+      <div class="mobile-row-sub">${escapeHtml(p.owner||'Owner not entered')} • Sheet ${escapeHtml(p.sheet)}</div>`;
+    main.onclick=()=>{
+      if(!mobileSelectedPlotIds.has(p.id)) mobileSelectedPlotIds.add(p.id);
+      closeMobilePlotsDrawer();
+      focusSavedPlot(p,true);
+    };
+
+    row.append(cb,main);
+    box.appendChild(row);
+  });
+
+  if(!rows.length){
+    box.innerHTML='<div class="muted" style="padding:16px 4px">No saved plots match the current search/filter.</div>';
+  }
+}
+
+function updateMobileSelectedVisibility(){
+  if(!isMobileSavedMode()) return;
+  savedMarkers.forEach((marker,id)=>marker.setVisible(mobileSelectedPlotIds.has(id)));
+  renderMobileSelectedBBoxes();
+
+  if(activeSavedPlot && !mobileSelectedPlotIds.has(activeSavedPlot.id)){
+    hideMobilePlotPopup();
+    clearSelectedBBox();
+    activeSavedPlot=null;
+  }
+}
+
+function fitMobileSelectedPlots(){
+  if(!savedMap) return;
+  const rows=savedPlots.filter(p=>mobileSelectedPlotIds.has(p.id) && validCenter(p));
+  if(!rows.length) return;
+
+  const bounds=new google.maps.LatLngBounds();
+  rows.forEach(p=>bounds.extend({lat:Number(p.center_lat),lng:Number(p.center_lng)}));
+  savedMap.fitBounds(bounds,50);
+  if(rows.length===1) savedMap.setZoom(19);
+  restartMobileToolbarTimer();
+}
+
+function renderMobileSelectedBBoxes(){
+  if(!isMobileSavedMode()) return;
+  clearAllBBoxes();
+
+  if(mobileBoxesEnabled){
+    savedPlots
+      .filter(p=>mobileSelectedPlotIds.has(p.id) && validBBox(p))
+      .forEach(p=>{
+        if(activeSavedPlot?.id===p.id) return;
+        const poly=drawBBoxPolygon(p,{selected:false,fillOpacity:mobileBBoxFillOpacity});
+        if(poly) allBBoxPolygons.set(p.id,poly);
+      });
+  }
+
+  if(activeSavedPlot && validBBox(activeSavedPlot)){
+    showSelectedBBox(activeSavedPlot);
+  }
+}
+
+function openMobileBoxesPanel(){
+  if(!isMobileSavedMode()) return;
+  const panel=$('mobileBoxesPanel');
+  const opening=panel.classList.contains('hidden');
+  if(opening){
+    panel.classList.remove('hidden');
+    $('mobileSavedToolbar')?.classList.remove('toolbar-hidden');
+    clearTimeout(mobileToolbarTimer);
+  }else{
+    hideMobileBoxesPanel();
+    restartMobileToolbarTimer();
+  }
+}
+
+function hideMobileBoxesPanel(){
+  $('mobileBoxesPanel')?.classList.add('hidden');
+}
+
+function setMobileBoxesEnabled(enabled){
+  mobileBoxesEnabled=!!enabled;
+  if($('mobileShowBoxes')) $('mobileShowBoxes').checked=mobileBoxesEnabled;
+  $('mobileBoxesBtn')?.classList.toggle('active',mobileBoxesEnabled);
+  renderMobileSelectedBBoxes();
+}
+
+function setMobileBBoxOpacity(percent){
+  const n=Math.max(0,Math.min(100,Number(percent)||0));
+  mobileBBoxFillOpacity=n/100;
+  if($('mobileBBoxOpacity')) $('mobileBBoxOpacity').value=String(n);
+  if($('mobileBBoxOpacityValue')) $('mobileBBoxOpacityValue').textContent=`${n}%`;
+  renderMobileSelectedBBoxes();
+}
+
+function showMobilePlotPopup(p){
+  if(!isMobileSavedMode()) return;
+  $('mobilePopupTitle').textContent=`Plot ${p.plot_no}`;
+  $('mobilePopupMeta').textContent=`${p.owner||'Owner not entered'} • Sheet ${p.sheet}`;
+  $('mobilePopupDirections').onclick=()=>openDirections(p);
+  $('mobilePopupDetails').onclick=()=>openDetails(p);
+  $('mobilePlotPopup').classList.remove('hidden');
+}
+
+function hideMobilePlotPopup(){
+  $('mobilePlotPopup')?.classList.add('hidden');
+}
+
 /* ----------------------------- SAVED PLOTS ----------------------------- */
 function initSavedMap(){
   savedMap = new google.maps.Map($('savedMap'), {
     center:{lat:25.3525,lng:83.9380},
     zoom:15,
-    mapTypeId:'satellite',
+    mapTypeId:'hybrid',
     tilt:0,
     streetViewControl:false,
     fullscreenControl:true,
-    mapTypeControl:true
+    mapTypeControl:!isMobileSavedMode()
   });
+
   savedInfoWindow = new google.maps.InfoWindow();
+
+  savedMap.addListener('dragstart',()=>{
+    if(isMobileSavedMode()){
+      hideMobileToolbarImmediately();
+      hideMobileBoxesPanel();
+    }
+  });
+
+  savedMap.addListener('zoom_changed',()=>{
+    if(isMobileSavedMode()){
+      hideMobileToolbarImmediately();
+      hideMobileBoxesPanel();
+    }
+  });
+
+  savedMap.addListener('idle',()=>{
+    if(isMobileSavedMode() && !mobileDrawerOpen){
+      showMobileToolbar(true);
+    }
+  });
+
+  savedMap.addListener('click',()=>{
+    if(isMobileSavedMode()){
+      hideMobilePlotPopup();
+      hideMobileBoxesPanel();
+      showMobileToolbar(true);
+    }
+  });
 }
 
 async function loadSavedPlots(){
   const r = await fetch('/api/plots');
   const data = await r.json();
   if(!r.ok) throw new Error(data.error || 'Could not load saved plots');
-  savedPlots = data;
+  savedPlots = Array.isArray(data) ? data : [];
 
   populateOwnerFilter();
+
+  if(isMobileSavedMode()){
+    // Mobile starts with every saved plot selected and visible.
+    resetMobileSelectionToAll();
+  }
+
   renderSavedList();
   renderSavedMarkers();
-  fitAllSavedPlots();
+
+  if(isMobileSavedMode()){
+    renderMobileSavedList();
+    if($('mobileShowBoxes')) $('mobileShowBoxes').checked = mobileBoxesEnabled;
+    if($('mobileBBoxOpacity')) $('mobileBBoxOpacity').value = String(Math.round(mobileBBoxFillOpacity*100));
+    if($('mobileBBoxOpacityValue')) $('mobileBBoxOpacityValue').textContent = `${Math.round(mobileBBoxFillOpacity*100)}%`;
+    $('mobileBoxesBtn')?.classList.toggle('active', mobileBoxesEnabled);
+    updateMobileSelectedVisibility();
+
+    // Give Google Maps one frame to lay out the full-screen container before fitting.
+    setTimeout(()=>{
+      google.maps.event.trigger(savedMap,'resize');
+      updateMobileSelectedVisibility();
+      fitMobileSelectedPlots();
+      showMobileToolbar(true);
+    },120);
+  }else{
+    fitAllSavedPlots();
+  }
 }
 
 function populateOwnerFilter(){
@@ -226,9 +546,15 @@ function renderSavedList(){
 }
 
 function syncSavedMarkerVisibility(rows){
-  const visible = new Set(rows.map(p => p.id));
-  savedMarkers.forEach((marker,id) => marker.setVisible(visible.has(id)));
-  renderAllBBoxes();
+  if(isMobileSavedMode()){
+    ensureAllMobilePlotsSelected();
+    savedMarkers.forEach((marker,id)=>marker.setVisible(mobileSelectedPlotIds.has(id)));
+    renderMobileSelectedBBoxes();
+  }else{
+    const visible=new Set(rows.map(p=>p.id));
+    savedMarkers.forEach((marker,id)=>marker.setVisible(visible.has(id)));
+    renderAllBBoxes();
+  }
 }
 
 function validCenter(p){
@@ -236,13 +562,13 @@ function validCenter(p){
 }
 
 function renderSavedMarkers(){
-  savedMarkers.forEach(m => m.setMap(null));
+  savedMarkers.forEach(m=>m.setMap(null));
   savedMarkers.clear();
   clearAllBBoxes();
   clearSelectedBBox();
 
-  savedPlots.filter(validCenter).forEach(p => {
-    const marker = new google.maps.Marker({
+  savedPlots.filter(validCenter).forEach(p=>{
+    const marker=new google.maps.Marker({
       position:{lat:Number(p.center_lat),lng:Number(p.center_lng)},
       map:savedMap,
       title:`Plot ${p.plot_no}`,
@@ -253,20 +579,31 @@ function renderSavedMarkers(){
       }
     });
 
-    marker.addListener('click', () => {
-      activeSavedPlot = p;
+    marker.addListener('click',()=>{
+      activeSavedPlot=p;
       renderSavedList();
       showSelectedBBox(p);
-      openSavedInfoWindow(p, marker);
-      showSavedSummary(p);
+
+      if(isMobileSavedMode()){
+        if(!mobileSelectedPlotIds.has(p.id)) mobileSelectedPlotIds.add(p.id);
+        showMobilePlotPopup(p);
+        restartMobileToolbarTimer();
+      }else{
+        openSavedInfoWindow(p,marker);
+        showSavedSummary(p);
+      }
     });
 
-    savedMarkers.set(p.id, marker);
+    savedMarkers.set(p.id,marker);
   });
-  renderAllBBoxes();
-  if(activeSavedPlot) showSelectedBBox(activeSavedPlot);
-}
 
+  if(isMobileSavedMode()){
+    updateMobileSelectedVisibility();
+  }else{
+    renderAllBBoxes();
+    if(activeSavedPlot) showSelectedBBox(activeSavedPlot);
+  }
+}
 
 function validBBox(p){
   return [p.xmin,p.ymin,p.xmax,p.ymax].every(v => Number.isFinite(Number(v))) &&
@@ -285,18 +622,24 @@ function bboxPath(p){
     return {lat,lng};
   });
 }
-function drawBBoxPolygon(p,{selected=false}={}){
+function drawBBoxPolygon(p,{selected=false,fillOpacity=null}={}){
   const path=bboxPath(p);
   if(!path||!savedMap) return null;
+
+  const requestedFill = fillOpacity == null
+    ? (selected ? Math.max(0.12,mobileBBoxFillOpacity) : mobileBBoxFillOpacity)
+    : fillOpacity;
+
   return new google.maps.Polygon({
-    paths:path,map:savedMap,
-    strokeColor:'#d93025',
-    strokeOpacity:selected?1:0.72,
-    strokeWeight:selected?3:1.5,
-    fillColor:'#d93025',
-    fillOpacity:selected?0.08:0.025,
+    paths:path,
+    map:savedMap,
+    strokeColor:'#ff1f0f',
+    strokeOpacity:1,
+    strokeWeight:selected?5:2,
+    fillColor:'#ff1f0f',
+    fillOpacity:requestedFill,
     clickable:false,
-    zIndex:selected?50:10
+    zIndex:selected?1000:100
   });
 }
 function clearSelectedBBox(){
@@ -337,19 +680,37 @@ function fitAllSavedPlots(){
 function focusSavedPlot(p, zoom=true){
   if(!validCenter(p)) return alert(`Plot ${p.plot_no} does not have saved center coordinates.`);
 
-  activeSavedPlot = p;
+  activeSavedPlot=p;
   renderSavedList();
-  const pos = {lat:Number(p.center_lat),lng:Number(p.center_lng)};
+
+  const pos={lat:Number(p.center_lat),lng:Number(p.center_lng)};
   savedMap.panTo(pos);
-  if(zoom) savedMap.setZoom(19);
+
+  if(zoom){
+    if(validBBox(p)){
+      const path=bboxPath(p);
+      const bounds=new google.maps.LatLngBounds();
+      path.forEach(pt=>bounds.extend(pt));
+      savedMap.fitBounds(bounds,80);
+      google.maps.event.addListenerOnce(savedMap,'idle',()=>{
+        if(savedMap.getZoom()>20) savedMap.setZoom(20);
+      });
+    }else{
+      savedMap.setZoom(19);
+    }
+  }
 
   showSelectedBBox(p);
-  const marker = savedMarkers.get(p.id);
-  if(marker) openSavedInfoWindow(p, marker);
-  showSavedSummary(p);
+  const marker=savedMarkers.get(p.id);
 
-  if(window.innerWidth <= 900){
-    $('savedMap').scrollIntoView({behavior:'smooth',block:'start'});
+  if(isMobileSavedMode()){
+    if(!mobileSelectedPlotIds.has(p.id)) mobileSelectedPlotIds.add(p.id);
+    updateMobileSelectedVisibility();
+    showMobilePlotPopup(p);
+    restartMobileToolbarTimer();
+  }else{
+    if(marker) openSavedInfoWindow(p,marker);
+    showSavedSummary(p);
   }
 }
 
@@ -364,6 +725,7 @@ function openDirections(p){
 }
 
 function openSavedInfoWindow(p, marker){
+  if(isMobileSavedMode()) return;
   const root = document.createElement('div');
   root.className = 'gm-info';
 
@@ -473,6 +835,8 @@ $('detailDelete').onclick = async () => {
   savedInfoWindow.close();
   $('selectedSummary').classList.add('hidden');
   clearSelectedBBox();
+  hideMobilePlotPopup();
+  mobileSelectedPlotIds.delete(p.id);
   activeSavedPlot = null;
   await loadSavedPlots();
 };
@@ -483,12 +847,51 @@ $('savedOwnerFilter').onchange = renderSavedList;
 $('showAllBBoxes').onchange = renderAllBBoxes;
 $('fitAllSaved').onclick = fitAllSavedPlots;
 
+$('mobilePlotsBtn').onclick=openMobilePlotsDrawer;
+$('mobileFitBtn').onclick=fitMobileSelectedPlots;
+$('mobileBoxesBtn').onclick=openMobileBoxesPanel;
+$('mobileShowBoxes').onchange=e=>setMobileBoxesEnabled(e.target.checked);
+$('mobileBBoxOpacity').oninput=e=>setMobileBBoxOpacity(e.target.value);
+$('mobilePopupClose').onclick=hideMobilePlotPopup;
+$('mobileDrawerClose').onclick=closeMobilePlotsDrawer;
+$('mobileSavedSearch').oninput=renderMobileSavedList;
+$('mobileSheetFilter').onchange=renderMobileSavedList;
+$('mobileOwnerFilter').onchange=renderMobileSavedList;
+
+$('mobileSelectAll').onchange=e=>{
+  const rows=filteredMobilePlots();
+  if(e.target.checked) rows.forEach(p=>mobileSelectedPlotIds.add(p.id));
+  else rows.forEach(p=>mobileSelectedPlotIds.delete(p.id));
+  updateMobileSelectedVisibility();
+  renderMobileSavedList();
+};
+
+window.addEventListener('resize',()=>{
+  if(!savedMap) return;
+
+  savedMap.setOptions({mapTypeControl:!isMobileSavedMode()});
+  google.maps.event.trigger(savedMap,'resize');
+
+  if(isMobileSavedMode()){
+    ensureAllMobilePlotsSelected();
+    renderMobileSavedList();
+    updateMobileSelectedVisibility();
+    showMobileToolbar(true);
+  }else{
+    hideMobilePlotPopup();
+    hideMobileBoxesPanel();
+    if(mobileDrawerOpen) closeMobilePlotsDrawer();
+    renderSavedList();
+    renderSavedMarkers();
+  }
+});
+
 /* ----------------------------- ADD PLOT ----------------------------- */
 function initAddMap(){
   addMap = new google.maps.Map($('addMap'), {
     center:{lat:25.3501,lng:83.9334},
     zoom:15,
-    mapTypeId:'satellite',
+    mapTypeId:'hybrid',
     tilt:0,
     streetViewControl:false,
     fullscreenControl:true,

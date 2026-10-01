@@ -158,3 +158,242 @@ label{display:block;font-size:13px;font-weight:650;margin-top:10px}
 }
 
 .saved-box-toggle{margin-top:2px;padding:7px 2px 2px;font-size:13px}
+
+
+/* V6.3 mobile-only Saved Plots UX */
+.mobile-only{display:none}
+
+.mobile-saved-toolbar{
+  position:fixed;
+  left:8px;
+  right:8px;
+  bottom:10px;
+  z-index:70;
+  display:flex;
+  gap:7px;
+  padding:7px;
+  border:1px solid var(--border);
+  border-radius:12px;
+  background:rgba(255,255,255,.97);
+  box-shadow:0 3px 18px rgba(0,0,0,.22);
+  transition:opacity .2s ease,transform .2s ease;
+}
+.mobile-saved-toolbar.toolbar-hidden{
+  opacity:0;
+  pointer-events:none;
+  transform:translateY(16px);
+}
+.mobile-tool-btn{
+  flex:1 1 0;
+  min-width:0;
+  border:1px solid #b8bec6;
+  background:#fff;
+  border-radius:9px;
+  padding:10px 8px;
+  font-weight:700;
+  font-size:15px;
+}
+.mobile-tool-btn.active{
+  background:#1a73e8;
+  color:#fff;
+  border-color:#1a73e8;
+}
+
+.mobile-boxes-panel{
+  position:fixed;
+  right:10px;
+  bottom:72px;
+  z-index:73;
+  width:min(280px,calc(100vw - 20px));
+  padding:13px 14px;
+  border:1px solid var(--border);
+  border-radius:12px;
+  background:#fff;
+  box-shadow:0 5px 22px rgba(0,0,0,.24);
+}
+.boxes-show-row{
+  display:flex;
+  align-items:center;
+  gap:9px;
+  font-weight:700;
+}
+.boxes-show-row input{width:auto}
+.boxes-opacity-head{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  margin:12px 0 5px;
+  font-size:13px;
+}
+.boxes-opacity-slider{
+  width:100%;
+  margin:0;
+}
+
+.mobile-plot-popup{
+  position:fixed;
+  left:50%;
+  top:86px;
+  transform:translateX(-50%);
+  width:min(310px,calc(100vw - 32px));
+  z-index:72;
+  background:#fff;
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:15px;
+  box-shadow:0 6px 28px rgba(0,0,0,.28);
+}
+.mobile-popup-close{
+  position:absolute;top:7px;right:9px;border:0;background:transparent;
+  font-size:25px;line-height:1
+}
+.mobile-popup-title{font-size:18px;font-weight:800;padding-right:28px}
+.mobile-popup-meta{font-size:13px;color:var(--muted);margin-top:4px;padding-right:20px}
+.mobile-popup-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+
+/* Full-screen mobile plot selector */
+.mobile-plots-backdrop{display:none!important}
+.mobile-plots-drawer{
+  position:fixed;
+  inset:64px 0 0 0;
+  z-index:75;
+  background:#fff;
+  border-radius:0;
+  box-shadow:none;
+  transform:translateX(100%);
+  transition:transform .22s ease;
+  padding:14px 14px 18px;
+  display:flex;
+  flex-direction:column;
+}
+.mobile-plots-drawer.open{transform:translateX(0)}
+.drawer-handle{display:none}
+.drawer-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:8px;
+}
+.drawer-head h2{margin:0}
+.drawer-filter-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+  margin-top:8px;
+}
+.drawer-select-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin:12px 2px 8px;
+}
+.mobile-saved-list{
+  overflow:auto;
+  flex:1 1 auto;
+  display:grid;
+  align-content:start;
+  gap:7px;
+  padding:2px 0 18px;
+}
+.mobile-plot-row{
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:10px;
+  display:grid;
+  grid-template-columns:auto 1fr;
+  align-items:start;
+  gap:10px;
+  background:#fff;
+}
+.mobile-plot-row.active{border-color:#1a73e8;background:#eef5ff}
+.mobile-plot-row input{width:auto;margin-top:4px}
+.mobile-row-main{cursor:pointer}
+.mobile-row-title{font-weight:800}
+.mobile-row-sub{font-size:12px;color:var(--muted);margin-top:2px}
+
+@media(max-width:900px){
+  #view-saved.active{
+    position:fixed;
+    inset:64px 0 0 0;
+    z-index:20;
+    background:#fff;
+  }
+  #view-saved .saved-layout{display:block;height:100%}
+  #view-saved .master-pane{display:none!important}
+  #view-saved .detail-map-pane{
+    height:100%;
+    min-height:0;
+    position:absolute;
+    inset:0;
+  }
+  #view-saved #savedMap{height:100%}
+  #view-saved .map-caption,
+  #view-saved .selected-summary{display:none!important}
+  .mobile-only{display:block}
+  .mobile-saved-toolbar{display:flex}
+}
+
+
+/* V6.4 - mobile Saved Plots scrolling fix */
+@media(max-width:900px){
+  #mobilePlotsDrawer{
+    overflow:hidden;
+    min-height:0;
+  }
+
+  #mobilePlotsDrawer .mobile-saved-list{
+    flex:1 1 auto;
+    min-height:0;
+    overflow-y:auto;
+    overflow-x:hidden;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior:contain;
+    padding-bottom:28px;
+  }
+
+  #mobilePlotsDrawer .drawer-head,
+  #mobilePlotsDrawer #mobileSavedSearch,
+  #mobilePlotsDrawer .drawer-filter-grid,
+  #mobilePlotsDrawer .drawer-select-row{
+    flex:0 0 auto;
+  }
+}
+
+
+/* V6.6 - robust full-screen Saved Plots scrolling */
+@media(max-width:900px){
+  #mobilePlotsDrawer{
+    display:block;
+    overflow-y:auto;
+    overflow-x:hidden;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior-y:contain;
+    touch-action:pan-y;
+    height:auto;
+    max-height:none;
+  }
+
+  #mobilePlotsDrawer.open{
+    overflow-y:auto;
+  }
+
+  #mobilePlotsDrawer .mobile-saved-list{
+    display:block;
+    overflow:visible;
+    min-height:0;
+    max-height:none;
+    padding-bottom:36px;
+  }
+
+  #mobilePlotsDrawer .mobile-plot-row{
+    margin-bottom:8px;
+  }
+
+  html.mobile-plots-open,
+  body.mobile-plots-open{
+    overflow:hidden;
+    height:100%;
+  }
+}

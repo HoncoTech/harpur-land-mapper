@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Harpur Land Mapper V6.1.1</title>
+<title>Harpur Land Mapper V6.5</title>
 <link rel="stylesheet" href="styles.css"/>
 <script src="https://cdn.jsdelivr.net/npm/proj4@2.15.0/dist/proj4.js"></script>
 </head>
@@ -24,7 +24,7 @@
       <button class="nav-link" data-view="about">About</button>
     </nav>
 
-    <div class="version-pill">v6.1.1</div>
+    <div class="version-pill">v6.5</div>
   </header>
 
   <div id="mobileBackdrop" class="mobile-backdrop hidden"></div>
@@ -88,6 +88,71 @@
           </div>
         </section>
       </div>
+
+      <div id="mobileSavedToolbar" class="mobile-saved-toolbar mobile-only hidden">
+        <button id="mobilePlotsBtn" class="mobile-tool-btn">☰ Plots</button>
+        <button id="mobileFitBtn" class="mobile-tool-btn">Fit All</button>
+        <button id="mobileBoxesBtn" class="mobile-tool-btn">Boxes ▾</button>
+      </div>
+
+      <div id="mobileBoxesPanel" class="mobile-boxes-panel mobile-only hidden">
+        <label class="boxes-show-row">
+          <input id="mobileShowBoxes" type="checkbox" checked/>
+          <span>Show Boxes</span>
+        </label>
+        <div class="boxes-opacity-head">
+          <span>Fill opacity</span>
+          <b id="mobileBBoxOpacityValue">10%</b>
+        </div>
+        <input id="mobileBBoxOpacity" class="boxes-opacity-slider"
+               type="range" min="0" max="100" step="1" value="10"/>
+      </div>
+
+      <div id="mobilePlotPopup" class="mobile-plot-popup mobile-only hidden">
+        <button id="mobilePopupClose" class="mobile-popup-close" aria-label="Close">×</button>
+        <div id="mobilePopupTitle" class="mobile-popup-title">Plot</div>
+        <div id="mobilePopupMeta" class="mobile-popup-meta"></div>
+        <div class="mobile-popup-actions">
+          <button id="mobilePopupDirections" class="primary compact">Directions</button>
+          <button id="mobilePopupDetails" class="secondary compact">Details</button>
+        </div>
+      </div>
+
+      <div id="mobilePlotsBackdrop" class="mobile-plots-backdrop mobile-only hidden"></div>
+
+      <aside id="mobilePlotsDrawer" class="mobile-plots-drawer mobile-only">
+        <div class="drawer-handle"></div>
+        <div class="drawer-head">
+          <div>
+            <h2>Saved Plots</h2>
+            <div id="mobileDrawerCount" class="muted"></div>
+          </div>
+          <button id="mobileDrawerClose" class="icon-btn" aria-label="Close plot drawer">×</button>
+        </div>
+
+        <input id="mobileSavedSearch" placeholder="Search plot / owner / notes"/>
+
+        <div class="drawer-filter-grid">
+          <select id="mobileSheetFilter">
+            <option value="">All sheets</option>
+            <option value="01">Sheet 01</option>
+            <option value="02">Sheet 02</option>
+          </select>
+          <select id="mobileOwnerFilter">
+            <option value="">All owners</option>
+          </select>
+        </div>
+
+        <div class="drawer-select-row">
+          <label class="check">
+            <input id="mobileSelectAll" type="checkbox" checked/>
+            Select All
+          </label>
+          <span id="mobileSelectedCount" class="muted"></span>
+        </div>
+
+        <div id="mobileSavedList" class="mobile-saved-list"></div>
+      </aside>
     </section>
 
     <!-- ADD PLOT: existing cadastral workflow moved here -->
@@ -160,7 +225,7 @@
       <div class="about-wrap">
         <div class="about-card">
           <h1>Harpur Land Mapper</h1>
-          <div class="version-badge">Version 6.1.1</div>
+          <div class="version-badge">Version 6.5</div>
           <p>
             Family land-mapping application for browsing saved plots on Google Satellite
             and adding/verifying parcels from Bihar BhuNaksha.
