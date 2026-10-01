@@ -11,6 +11,8 @@ let savedPlots = [];
 let savedMarkers = new Map();
 let savedInfoWindow = null;
 let activeSavedPlot = null;
+let selectedBBoxPolygon = null;
+let allBBoxPolygons = new Map();
 
 // Add Plot state
 let addMap = null;
@@ -226,6 +228,7 @@ function renderSavedList(){
 function syncSavedMarkerVisibility(rows){
   const visible = new Set(rows.map(p => p.id));
   savedMarkers.forEach((marker,id) => marker.setVisible(visible.has(id)));
+  renderAllBBoxes();
 }
 
 function validCenter(p){
@@ -235,6 +238,8 @@ function validCenter(p){
 function renderSavedMarkers(){
   savedMarkers.forEach(m => m.setMap(null));
   savedMarkers.clear();
+  clearAllBBoxes();
+  clearSelectedBBox();
 
   savedPlots.filter(validCenter).forEach(p => {
     const marker = new google.maps.Marker({
@@ -251,12 +256,68 @@ function renderSavedMarkers(){
     marker.addListener('click', () => {
       activeSavedPlot = p;
       renderSavedList();
+      showSelectedBBox(p);
       openSavedInfoWindow(p, marker);
       showSavedSummary(p);
     });
 
     savedMarkers.set(p.id, marker);
   });
+  renderAllBBoxes();
+  if(activeSavedPlot) showSelectedBBox(activeSavedPlot);
+}
+
+
+function validBBox(p){
+  return [p.xmin,p.ymin,p.xmax,p.ymax].every(v => Number.isFinite(Number(v))) &&
+         Number(p.xmax) > Number(p.xmin) &&
+         Number(p.ymax) > Number(p.ymin);
+}
+function bboxPath(p){
+  if(!validBBox(p)) return null;
+  return [
+    [Number(p.xmin),Number(p.ymin)],
+    [Number(p.xmin),Number(p.ymax)],
+    [Number(p.xmax),Number(p.ymax)],
+    [Number(p.xmax),Number(p.ymin)]
+  ].map(([x,y])=>{
+    const [lng,lat]=proj4('EPSG:32645','EPSG:4326',[x,y]);
+    return {lat,lng};
+  });
+}
+function drawBBoxPolygon(p,{selected=false}={}){
+  const path=bboxPath(p);
+  if(!path||!savedMap) return null;
+  return new google.maps.Polygon({
+    paths:path,map:savedMap,
+    strokeColor:'#d93025',
+    strokeOpacity:selected?1:0.72,
+    strokeWeight:selected?3:1.5,
+    fillColor:'#d93025',
+    fillOpacity:selected?0.08:0.025,
+    clickable:false,
+    zIndex:selected?50:10
+  });
+}
+function clearSelectedBBox(){
+  if(selectedBBoxPolygon){selectedBBoxPolygon.setMap(null);selectedBBoxPolygon=null;}
+}
+function showSelectedBBox(p){
+  clearSelectedBBox();
+  selectedBBoxPolygon=drawBBoxPolygon(p,{selected:true});
+}
+function clearAllBBoxes(){
+  allBBoxPolygons.forEach(poly=>poly.setMap(null));
+  allBBoxPolygons.clear();
+}
+function renderAllBBoxes(){
+  clearAllBBoxes();
+  if(!$('showAllBBoxes')?.checked||!savedMap) return;
+  filteredSavedPlots().filter(validBBox).forEach(p=>{
+    const poly=drawBBoxPolygon(p,{selected:false});
+    if(poly) allBBoxPolygons.set(p.id,poly);
+  });
+  if(activeSavedPlot) showSelectedBBox(activeSavedPlot);
 }
 
 function fitAllSavedPlots(){
@@ -282,6 +343,7 @@ function focusSavedPlot(p, zoom=true){
   savedMap.panTo(pos);
   if(zoom) savedMap.setZoom(19);
 
+  showSelectedBBox(p);
   const marker = savedMarkers.get(p.id);
   if(marker) openSavedInfoWindow(p, marker);
   showSavedSummary(p);
@@ -410,6 +472,7 @@ $('detailDelete').onclick = async () => {
   closeDetails();
   savedInfoWindow.close();
   $('selectedSummary').classList.add('hidden');
+  clearSelectedBBox();
   activeSavedPlot = null;
   await loadSavedPlots();
 };
@@ -417,6 +480,7 @@ $('detailDelete').onclick = async () => {
 $('savedSearch').oninput = renderSavedList;
 $('savedSheetFilter').onchange = renderSavedList;
 $('savedOwnerFilter').onchange = renderSavedList;
+$('showAllBBoxes').onchange = renderAllBBoxes;
 $('fitAllSaved').onclick = fitAllSavedPlots;
 
 /* ----------------------------- ADD PLOT ----------------------------- */

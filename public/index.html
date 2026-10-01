@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Harpur Land Mapper V6.0</title>
+<title>Harpur Land Mapper V6.1.1</title>
 <link rel="stylesheet" href="styles.css"/>
 <script src="https://cdn.jsdelivr.net/npm/proj4@2.15.0/dist/proj4.js"></script>
 </head>
@@ -24,7 +24,7 @@
       <button class="nav-link" data-view="about">About</button>
     </nav>
 
-    <div class="version-pill">v6.0</div>
+    <div class="version-pill">v6.1.1</div>
   </header>
 
   <div id="mobileBackdrop" class="mobile-backdrop hidden"></div>
@@ -63,6 +63,10 @@
                 <option value="">All owners</option>
               </select>
             </div>
+            <label class="check saved-box-toggle">
+              <input id="showAllBBoxes" type="checkbox"/>
+              Show all plot boxes
+            </label>
           </div>
 
           <div id="savedList" class="saved-list"></div>
@@ -70,7 +74,7 @@
 
         <section class="detail-map-pane">
           <div id="savedMap" class="map"></div>
-          <div class="map-caption">Google Satellite • Saved database plots only</div>
+          <div class="map-caption">Satellite + labels • Saved pins • Selected plot BBox in red</div>
 
           <div id="selectedSummary" class="selected-summary hidden">
             <div>
@@ -146,7 +150,7 @@
 
         <section class="add-map-pane">
           <div id="addMap" class="map"></div>
-          <div class="map-caption">Google Satellite + active BhuNaksha sheet</div>
+          <div class="map-caption">Satellite + labels + active BhuNaksha sheet</div>
         </section>
       </div>
     </section>
@@ -156,7 +160,7 @@
       <div class="about-wrap">
         <div class="about-card">
           <h1>Harpur Land Mapper</h1>
-          <div class="version-badge">Version 6.0</div>
+          <div class="version-badge">Version 6.1.1</div>
           <p>
             Family land-mapping application for browsing saved plots on Google Satellite
             and adding/verifying parcels from Bihar BhuNaksha.
@@ -172,6 +176,8 @@
           <h3>Saved Plot workflow</h3>
           <ul>
             <li>All database plots with valid center coordinates appear as pins.</li>
+            <li>The selected plot BBox is drawn in red.</li>
+            <li>Optional <b>Show all plot boxes</b> displays all saved BBoxes.</li>
             <li>Select a plot from the master list to navigate directly to its pin.</li>
             <li>Tap a pin to see plot number, owner, sheet, Directions and Details.</li>
             <li>Directions opens Google Maps with the saved plot as destination; Google Maps can use the user's current location.</li>

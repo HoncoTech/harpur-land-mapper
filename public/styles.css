@@ -156,3 +156,5 @@ label{display:block;font-size:13px;font-weight:650;margin-top:10px}
   .summary-actions{width:100%}
   .summary-actions button{flex:1}
 }
+
+.saved-box-toggle{margin-top:2px;padding:7px 2px 2px;font-size:13px}

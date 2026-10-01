@@ -216,8 +216,8 @@ async function proxyPng(url, res, logLabel='BhuNaksha') {
 app.get('/api/app-config', (req,res) => {
   res.json({
     name: 'Harpur Land Mapper',
-    version: '6.0.0',
-    release: '6.0',
+    version: '6.1.1',
+    release: '6.1.1',
     googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY || ''
   });
 });
@@ -232,8 +232,8 @@ app.get('/api/config', async (req,res) => {
 app.get('/api/about', (req,res) => {
   res.json({
     name: 'Harpur Land Mapper',
-    version: '6.0.0',
-    release: '6.0',
+    version: '6.1.1',
+    release: '6.1.1',
     survey: 'CS',
     sheet: '01 / 02',
     village: 'Harpur(199)',
@@ -526,4 +526,4 @@ app.delete('/api/plots/:survey/:sheet/:plotNo', (req,res) => {
   }
 });
 
-app.listen(PORT,()=>console.log(`Harpur Land Mapper V6.0: http://localhost:${PORT}`));
+app.listen(PORT,()=>console.log(`Harpur Land Mapper V6.1.1: http://localhost:${PORT}`));

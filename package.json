@@ -1,8 +1,8 @@
 {
-  "name": "harpur-land-mapper-v5.6.1-sheet2-fixed",
-  "version": "5.6.1",
+  "name": "harpur-land-mapper-v6.1.1-bbox-visible-hybrid",
+  "version": "6.1.1",
   "private": true,
-  "description": "Harpur Land Mapper v5.6.1 with exact CS Sheet 02 BhuNaksha extent/WMS support.",
+  "description": "Harpur Land Mapper v6.1.1 with highly visible saved plot BBox and hybrid satellite+labels default.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

@@ -1,31 +1,22 @@
-# Harpur Land Mapper — Version 5.6.1
+# Harpur Land Mapper V6.1.1
 
-## Sheet 02 fix
+## Fixes / improvements
 
-V5.6.1 uses the exact BhuNaksha values captured from the official viewer for Harpur CS Sheet 02.
+### BBox visibility
+The selected saved plot BBox is now rendered as a highly visible Google Maps Rectangle:
+- bright red outline
+- 5 px selected outline
+- stronger transparent red fill
+- high z-index
+- selecting a plot fits the map to the BBox so the whole rectangle is visible
 
-Sheet 02 native extent:
+`Show all plot boxes` still shows the other filtered BBoxes with lighter outlines.
 
-```text
-EPSG:32645
-xmin 190449.736065251
-ymin 2805551.8911005286
-xmax 192577.99499258207
-ymax 2806753.2243631342
-```
+The BBox uses only SQLite `xmin`, `ymin`, `xmax`, `ymax`; it does not call BhuNaksha.
 
-Sheet 02 exact working WMS display BBOX:
+### Satellite labels
+Both Saved Plots and Add Plot maps now default to Google Maps `hybrid` mode:
+- satellite imagery
+- roads/place labels overlaid
 
-```text
-189720.5811856323,2804925.385129284,193307.14987220077,2807379.730334379
-```
-
-GIS code:
-
-```text
-CS30010202301990602
-```
-
-The earlier 5.6 error came from assuming `getVVVVExtentGeoref` returned a nested `nativeExtent` object. For Sheet 02 the captured response is flat (`xmin`, `ymin`, `xmax`, `ymax`). V5.6.1 no longer derives Sheet 02's display BBOX; it uses the exact official viewer request.
-
-Also pins Node to 22.22.0 for Render compatibility with `better-sqlite3`.
+Important: the red rectangle is the BBox/envelope, not the exact legal parcel boundary.
