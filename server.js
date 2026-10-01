@@ -154,23 +154,73 @@ function buildVillageMapUrl(cfg, {xmin, ymin, xmax, ymax, width, height}) {
 }
 
 async function proxyPng(url, res, logLabel='BhuNaksha') {
-  const upstream = await fetch(url, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0',
-      'Accept': 'image/png,image/*;q=0.9,*/*;q=0.8',
-      'Referer': `${BHU}/`
+  const maxAttempts = 3;
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 20000);
+
+      const upstream = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0',
+          'Accept': 'image/png,image/*;q=0.9,*/*;q=0.8',
+          'Referer': `${BHU}/`
+        }
+      });
+
+      clearTimeout(timer);
+      const buf = Buffer.from(await upstream.arrayBuffer());
+      const contentType = upstream.headers.get('content-type') || '';
+
+      if (upstream.ok && contentType.includes('image')) {
+        res.set('Content-Type', contentType || 'image/png');
+        res.set('Cache-Control', 'private, max-age=30');
+        res.set('X-BhuNaksha-Attempt', String(attempt));
+        return res.send(buf);
+      }
+
+      lastError = new Error(
+        `${logLabel} upstream HTTP ${upstream.status}, content-type=${contentType}`
+      );
+      console.warn(
+        `${logLabel} attempt ${attempt}/${maxAttempts} failed:`,
+        upstream.status,
+        contentType,
+        buf.toString('utf8').slice(0,160)
+      );
+
+      // Retry transient upstream failures. For a definite client-side WMS
+      // parameter error, retrying is unlikely to help.
+      if (upstream.status >= 400 && upstream.status < 500 && upstream.status !== 429) {
+        break;
+      }
+    } catch (err) {
+      lastError = err;
+      console.warn(`${logLabel} attempt ${attempt}/${maxAttempts} error:`, err.message);
     }
-  });
-  const buf = Buffer.from(await upstream.arrayBuffer());
-  if (!upstream.ok) {
-    console.error(`${logLabel} upstream error:`, upstream.status, buf.toString('utf8').slice(0,300));
-    res.status(502).send(`BhuNaksha WMS HTTP ${upstream.status}`);
-    return;
+
+    if (attempt < maxAttempts) {
+      await new Promise(r => setTimeout(r, attempt * 500));
+    }
   }
-  res.set('Content-Type', upstream.headers.get('content-type') || 'image/png');
-  res.set('Cache-Control', 'no-store');
-  res.send(buf);
+
+  console.error(`${logLabel} failed after retries:`, lastError?.message);
+  if (!res.headersSent) {
+    res.status(502).send(`BhuNaksha PNG temporarily unavailable. ${lastError?.message || ''}`);
+  }
 }
+
+app.get('/api/app-config', (req,res) => {
+  res.json({
+    name: 'Harpur Land Mapper',
+    version: '6.0.0',
+    release: '6.0',
+    googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY || ''
+  });
+});
 
 app.get('/api/config', async (req,res) => {
   try{
@@ -182,8 +232,8 @@ app.get('/api/config', async (req,res) => {
 app.get('/api/about', (req,res) => {
   res.json({
     name: 'Harpur Land Mapper',
-    version: '5.6.1',
-    release: '5.6.1',
+    version: '6.0.0',
+    release: '6.0',
     survey: 'CS',
     sheet: '01 / 02',
     village: 'Harpur(199)',
@@ -191,7 +241,9 @@ app.get('/api/about', (req,res) => {
     district: 'Buxar',
     state: 'Bihar',
     features: [
-      'Google Satellite base map',
+      'Saved Plots master-detail landing page',
+      'Google Satellite map with all saved plot pins',
+      'Directions from current location to a saved plot',
       'Dynamic BhuNaksha cadastral PNG refresh on pan/zoom',
       'Click-to-identify parcel',
       'Selection pin with plot number',
@@ -474,4 +526,4 @@ app.delete('/api/plots/:survey/:sheet/:plotNo', (req,res) => {
   }
 });
 
-app.listen(PORT,()=>console.log(`Harpur Land Mapper V5.6.1: http://localhost:${PORT}`));
+app.listen(PORT,()=>console.log(`Harpur Land Mapper V6.0: http://localhost:${PORT}`));

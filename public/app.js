@@ -1,579 +1,698 @@
-
 proj4.defs('EPSG:32645','+proj=utm +zone=45 +datum=WGS84 +units=m +no_defs +type=crs');
-
-let map, config;
-let currentSheet = '01';
-let selectionMarker = null;
-let overlayView = null;
-let selectedPlot = null, selectedPolygon = null;
-let saved = [], savedPolygons = [];
-let refreshTimer = null;
-let lastOverlaySignature = '';
 
 const $ = id => document.getElementById(id);
 
-function createBhuNakshaOverlayClass(){
-  if(!window.google?.maps?.OverlayView) {
-    throw new Error('Google Maps API is not loaded yet.');
-  }
+let appConfig = null;
+let googleLoaded = false;
 
-  return class BhuNakshaImageOverlay extends google.maps.OverlayView {
-    constructor(url,bounds,opacity=0.9){
-      super();
-      this.url = url;
-      this.bounds = bounds;
-      this.opacity = opacity;
-      this.div = null;
-      this.img = null;
+// Saved Plots state
+let savedMap = null;
+let savedPlots = [];
+let savedMarkers = new Map();
+let savedInfoWindow = null;
+let activeSavedPlot = null;
+
+// Add Plot state
+let addMap = null;
+let addConfig = null;
+let currentSheet = localStorage.getItem('harpurSheet') || '01';
+let overlayView = null;
+let selectionMarker = null;
+let selectedPlot = null;
+let selectedPolygon = null;
+let addRefreshTimer = null;
+let lastOverlaySignature = '';
+
+/* ----------------------------- NAVIGATION ----------------------------- */
+function setView(view){
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === `view-${view}`));
+  document.querySelectorAll('[data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+
+  history.replaceState(null,'',`#${view}`);
+  closeMobileMenu();
+
+  // Google Maps needs resize after a previously hidden container becomes visible.
+  setTimeout(() => {
+    if(view === 'saved' && savedMap){
+      google.maps.event.trigger(savedMap,'resize');
+      if(activeSavedPlot) focusSavedPlot(activeSavedPlot, false);
+      else fitAllSavedPlots();
     }
-
-    onAdd(){
-      this.div = document.createElement('div');
-      this.div.style.position = 'absolute';
-
-      this.img = document.createElement('img');
-      this.img.src = this.url;
-      this.img.className = 'bhu-sheet';
-      this.img.style.position = 'absolute';
-      this.img.style.left = '0';
-      this.img.style.top = '0';
-      this.img.style.width = '100%';
-      this.img.style.height = '100%';
-      this.img.style.opacity = String(this.opacity);
-
-      this.img.onload = () => {
-        $('status').textContent = 'Cadastral PNG refreshed for current zoom/viewport. Zoom or pan again to fetch a sharper image.';
-      };
-      this.img.onerror = () => {
-        $('status').textContent = 'BhuNaksha PNG failed to load.';
-      };
-
-      this.div.appendChild(this.img);
-      this.getPanes().overlayLayer.appendChild(this.div);
+    if(view === 'add' && addMap){
+      google.maps.event.trigger(addMap,'resize');
+      scheduleAddOverlayRefresh(true);
     }
-
-    draw(){
-      if(!this.div) return;
-      const projection = this.getProjection();
-      if(!projection) return;
-
-      const sw = projection.fromLatLngToDivPixel(new google.maps.LatLng(this.bounds.south,this.bounds.west));
-      const ne = projection.fromLatLngToDivPixel(new google.maps.LatLng(this.bounds.north,this.bounds.east));
-      if(!sw || !ne) return;
-
-      this.div.style.left = sw.x + 'px';
-      this.div.style.top = ne.y + 'px';
-      this.div.style.width = (ne.x - sw.x) + 'px';
-      this.div.style.height = (sw.y - ne.y) + 'px';
-    }
-
-    onRemove(){
-      if(this.div?.parentNode) this.div.parentNode.removeChild(this.div);
-      this.div = null;
-      this.img = null;
-    }
-
-    setOpacity(v){
-      this.opacity = v;
-      if(this.img) this.img.style.opacity = String(v);
-    }
-
-    update(url,bounds){
-      this.url = url;
-      this.bounds = bounds;
-      if(this.img) this.img.src = url;
-      this.draw();
-    }
-  };
+  }, 50);
 }
 
-let BhuNakshaImageOverlay = null;
+function openMobileMenu(){
+  $('mobileMenu').classList.add('open');
+  $('mobileBackdrop').classList.remove('hidden');
+}
+function closeMobileMenu(){
+  $('mobileMenu').classList.remove('open');
+  $('mobileBackdrop').classList.add('hidden');
+}
 
-async function loadConfig(){
-  const r = await fetch(`/api/config?sheet=${encodeURIComponent(currentSheet)}`);
+document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
+$('hamburger').onclick = openMobileMenu;
+$('closeMenu').onclick = closeMobileMenu;
+$('mobileBackdrop').onclick = closeMobileMenu;
+
+/* ----------------------------- GOOGLE SETUP ----------------------------- */
+async function loadAppConfig(){
+  const r = await fetch('/api/app-config');
   const d = await r.json();
-  if(!r.ok) throw new Error(d.error || 'Could not load config');
-  config = d;
-  if (d.googleMapsApiKey && !$('apiKey').value.trim()) {
-    $('apiKey').value = d.googleMapsApiKey;
-  }
+  if(!r.ok) throw new Error(d.error || 'Could not load app config');
+  appConfig = d;
   return d;
 }
 
-function updateRawImageLink(){
-  const a=$('rawImageLink'); if(a) a.href=`/api/bhunaksha-sheet.png?sheet=${encodeURIComponent(currentSheet)}`;
-}
-async function switchSheet(sheet){
-  currentSheet=String(sheet||'01').padStart(2,'0'); localStorage.setItem('harpurSheet',currentSheet);
-  clearSelectionPin(); clearSelectedPolygon(); selectedPlot=null; $('plotForm').classList.add('hidden'); lastOverlaySignature='';
-  if(overlayView){overlayView.setMap(null);overlayView=null;}
-  $('status').textContent=`Loading CS Sheet ${currentSheet}...`;
-  await loadConfig(); updateRawImageLink();
-  if(map){fitSheet();scheduleViewportRefresh(true);redrawSaved();}
-  $('status').textContent=`CS Sheet ${currentSheet} loaded. Zoom and click a parcel.`;
-}
-
-function fitSheet(){
-  if(!map || !config) return;
-  const b = config.googleBounds;
-  map.fitBounds(new google.maps.LatLngBounds(
-    {lat:b.south,lng:b.west},
-    {lat:b.north,lng:b.east}
-  ), 30);
-}
-
-function nativeBBoxToLatLngBounds(b) {
-  const sw = proj4('EPSG:32645','EPSG:4326',[b.xmin,b.ymin]);
-  const ne = proj4('EPSG:32645','EPSG:4326',[b.xmax,b.ymax]);
-  const nw = proj4('EPSG:32645','EPSG:4326',[b.xmin,b.ymax]);
-  const se = proj4('EPSG:32645','EPSG:4326',[b.xmax,b.ymin]);
-  const lats = [sw[1],ne[1],nw[1],se[1]];
-  const lngs = [sw[0],ne[0],nw[0],se[0]];
-  return {
-    south: Math.min(...lats),
-    north: Math.max(...lats),
-    west: Math.min(...lngs),
-    east: Math.max(...lngs)
-  };
-}
-
-function intersectionBBox(a,b){
-  const xmin = Math.max(a.xmin,b.xmin);
-  const ymin = Math.max(a.ymin,b.ymin);
-  const xmax = Math.min(a.xmax,b.xmax);
-  const ymax = Math.min(a.ymax,b.ymax);
-  if(xmax <= xmin || ymax <= ymin) return null;
-  return {xmin,ymin,xmax,ymax};
-}
-
-function currentViewportNativeBBox(){
-  if(!map || !config) return null;
-  const bounds = map.getBounds();
-  if(!bounds) return null;
-
-  const ne = bounds.getNorthEast();
-  const sw = bounds.getSouthWest();
-  const nw = new google.maps.LatLng(ne.lat(), sw.lng());
-  const se = new google.maps.LatLng(sw.lat(), ne.lng());
-
-  const pts = [ne,nw,se,sw].map(p => proj4('EPSG:4326','EPSG:32645',[p.lng(), p.lat()]));
-  const xs = pts.map(p => p[0]);
-  const ys = pts.map(p => p[1]);
-
-  const view = {
-    xmin: Math.min(...xs),
-    ymin: Math.min(...ys),
-    xmax: Math.max(...xs),
-    ymax: Math.max(...ys)
-  };
-
-  return intersectionBBox(view, config.imageBBox);
-}
-
-function currentViewportImageSize(){
-  const rect = $('map').getBoundingClientRect();
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  return {
-    width: Math.max(512, Math.round(rect.width * dpr)),
-    height: Math.max(512, Math.round(rect.height * dpr))
-  };
-}
-
-function overlaySignature(bbox, size){
-  return [
-    map?.getZoom() || '',
-    bbox.xmin.toFixed(2), bbox.ymin.toFixed(2),
-    bbox.xmax.toFixed(2), bbox.ymax.toFixed(2),
-    size.width, size.height
-  ].join('|');
-}
-
-function refreshViewportOverlay({force=false} = {}){
-  if(!map || !config) return;
-  if(!$('showNaksha').checked) {
-    if(overlayView){ overlayView.setMap(null); overlayView = null; }
+function injectGoogle(key){
+  if(window.google?.maps){
+    initGoogleMaps();
     return;
   }
+  const s = document.createElement('script');
+  s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&callback=initGoogleMaps`;
+  s.async = true;
+  s.defer = true;
+  s.onerror = () => {
+    $('keyModal').classList.remove('hidden');
+    alert('Google Maps JavaScript API failed to load. Check the API key and allowed website restrictions.');
+  };
+  document.head.appendChild(s);
+}
 
-  const bbox = currentViewportNativeBBox();
-  if(!bbox) {
-    $('status').textContent = 'Current Google view does not intersect the Harpur sheet.';
-    if(overlayView){ overlayView.setMap(null); overlayView = null; }
-    return;
+async function bootstrap(){
+  try{
+    await loadAppConfig();
+    const stored = localStorage.getItem('harpurGoogleKey') || '';
+    const key = appConfig.googleMapsApiKey || stored;
+
+    if(key){
+      $('apiKey').value = key;
+      injectGoogle(key);
+    }else{
+      $('keyModal').classList.remove('hidden');
+    }
+
+    const hash = location.hash.replace('#','');
+    if(['saved','add','about'].includes(hash)) setView(hash);
+    else setView('saved');
+  }catch(err){
+    alert(err.message);
   }
+}
 
-  const size = currentViewportImageSize();
-  const signature = overlaySignature(bbox, size);
-  if(!force && signature === lastOverlaySignature) return;
-  lastOverlaySignature = signature;
+$('loadGoogle').onclick = () => {
+  const key = $('apiKey').value.trim();
+  if(!key) return alert('Enter a Google Maps API key.');
+  localStorage.setItem('harpurGoogleKey', key);
+  $('keyModal').classList.add('hidden');
+  injectGoogle(key);
+};
 
-  const q = new URLSearchParams({
-    xmin: bbox.xmin,
-    ymin: bbox.ymin,
-    xmax: bbox.xmax,
-    ymax: bbox.ymax,
-    width: size.width,
-    height: size.height,
-    sheet: currentSheet,
-    t: Date.now()
+window.initGoogleMaps = async function(){
+  googleLoaded = true;
+  $('keyModal').classList.add('hidden');
+
+  initSavedMap();
+  initAddMap();
+
+  await loadSavedPlots();
+  await loadAddSheetConfig(currentSheet);
+};
+
+/* ----------------------------- SAVED PLOTS ----------------------------- */
+function initSavedMap(){
+  savedMap = new google.maps.Map($('savedMap'), {
+    center:{lat:25.3525,lng:83.9380},
+    zoom:15,
+    mapTypeId:'satellite',
+    tilt:0,
+    streetViewControl:false,
+    fullscreenControl:true,
+    mapTypeControl:true
   });
-
-  const url = `/api/viewport-overlay.png?${q.toString()}`;
-  const bounds = nativeBBoxToLatLngBounds(bbox);
-
-  if(!BhuNakshaImageOverlay) {
-    BhuNakshaImageOverlay = createBhuNakshaOverlayClass();
-  }
-
-  if(!overlayView) {
-    overlayView = new BhuNakshaImageOverlay(url, bounds, Number($('opacity').value) / 100);
-    overlayView.setMap(map);
-  } else {
-    overlayView.update(url, bounds);
-    overlayView.setOpacity(Number($('opacity').value) / 100);
-  }
-
-  $('status').textContent = `Refreshing cadastral PNG for zoom ${map.getZoom()}...`;
+  savedInfoWindow = new google.maps.InfoWindow();
 }
 
-function scheduleViewportRefresh(force=false){
-  clearTimeout(refreshTimer);
-  refreshTimer = setTimeout(() => refreshViewportOverlay({force}), 200);
-}
-
-
-function plotCenterFromBBox(p){
-  const x = (Number(p.xmin) + Number(p.xmax)) / 2;
-  const y = (Number(p.ymin) + Number(p.ymax)) / 2;
-  const [lng,lat] = proj4('EPSG:32645','EPSG:4326',[x,y]);
-  return {lat,lng};
-}
-
-function googleMapUrl(lat,lng){
-  return `https://www.google.com/maps?q=${lat.toFixed(8)},${lng.toFixed(8)}`;
-}
-
-
-function placeSelectionPin(latLng, label=''){
-  if(!map) return;
-
-  if(selectionMarker){
-    selectionMarker.setMap(null);
-    selectionMarker = null;
-  }
-
-  selectionMarker = new google.maps.Marker({
-    position: latLng,
-    map,
-    title: label ? `Selected plot ${label}` : 'Selected location',
-    label: label ? {
-      text: String(label),
-      fontWeight: '700'
-    } : undefined,
-    animation: google.maps.Animation.DROP,
-    zIndex: 999
-  });
-}
-
-function clearSelectionPin(){
-  if(selectionMarker){
-    selectionMarker.setMap(null);
-    selectionMarker = null;
-  }
-}
-
-async function lookupPlot(latLng){
-  placeSelectionPin(latLng);
-  const [x,y] = proj4('EPSG:4326','EPSG:32645',[latLng.lng(),latLng.lat()]);
-  $('status').textContent = 'Identifying BhuNaksha plot...';
-  const q = new URLSearchParams({x:String(x),y:String(y),sheet:currentSheet});
-  const r = await fetch(`/api/plot-at-xy?${q.toString()}`);
+async function loadSavedPlots(){
+  const r = await fetch('/api/plots');
   const data = await r.json();
-  if(!r.ok) throw new Error(data.error || 'Plot lookup failed');
-  const s = data.scalar;
-  if(!s || s.has_data !== 'Y') throw new Error('No BhuNaksha plot found at this click.');
+  if(!r.ok) throw new Error(data.error || 'Could not load saved plots');
+  savedPlots = data;
 
-  selectedPlot = {
-    survey:'CS',sheet:currentSheet,state:'10',
-    gis_code:config.gisCode,levels:config.levels,
-    plot_no:String(s.plotNo || data.hit?.kide || ''),
-    plot_id:String(s.ID || data.hit?.id || ''),
-    pniu:String(s.PNIU || ''),
-    seed_x:x,seed_y:y,
-    xmin:s.xmin,ymin:s.ymin,xmax:s.xmax,ymax:s.ymax,
-    geometry:null,source:''
+  populateOwnerFilter();
+  renderSavedList();
+  renderSavedMarkers();
+  fitAllSavedPlots();
+}
+
+function populateOwnerFilter(){
+  const select = $('savedOwnerFilter');
+  const current = select.value;
+  const owners = [...new Set(savedPlots.map(p => (p.owner || '').trim()).filter(Boolean))]
+    .sort((a,b)=>a.localeCompare(b));
+
+  select.innerHTML = '<option value="">All owners</option>';
+  owners.forEach(owner => {
+    const o = document.createElement('option');
+    o.value = owner;
+    o.textContent = owner;
+    select.appendChild(o);
+  });
+  select.value = owners.includes(current) ? current : '';
+}
+
+function filteredSavedPlots(){
+  const q = $('savedSearch').value.trim().toLowerCase();
+  const sheet = $('savedSheetFilter').value;
+  const owner = $('savedOwnerFilter').value;
+
+  return savedPlots.filter(p => {
+    if(sheet && p.sheet !== sheet) return false;
+    if(owner && (p.owner || '') !== owner) return false;
+    if(q){
+      const hay = `${p.plot_no} ${p.owner || ''} ${p.local_name || ''} ${p.notes || ''}`.toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  }).sort((a,b)=>{
+    const an = Number(a.plot_no), bn = Number(b.plot_no);
+    if(Number.isFinite(an) && Number.isFinite(bn)) return an-bn;
+    return String(a.plot_no).localeCompare(String(b.plot_no));
+  });
+}
+
+function renderSavedList(){
+  const rows = filteredSavedPlots();
+  $('savedCount').textContent = `${rows.length} of ${savedPlots.length} plots`;
+  const box = $('savedList');
+  box.innerHTML = '';
+
+  rows.forEach(p => {
+    const item = document.createElement('div');
+    item.className = 'plot-row' + (activeSavedPlot?.id === p.id ? ' active' : '');
+    item.dataset.id = p.id;
+
+    const head = document.createElement('div');
+    head.className = 'plot-row-head';
+    head.innerHTML = `<span class="plot-no">Plot ${escapeHtml(p.plot_no)}</span><span class="plot-sheet">Sheet ${escapeHtml(p.sheet)}</span>`;
+
+    const owner = document.createElement('div');
+    owner.className = 'plot-owner';
+    owner.textContent = p.owner || 'Owner not entered';
+
+    item.appendChild(head);
+    item.appendChild(owner);
+
+    const secondary = (p.local_name || p.notes || '').trim();
+    if(secondary){
+      const note = document.createElement('div');
+      note.className = 'plot-note';
+      note.textContent = secondary;
+      item.appendChild(note);
+    }
+
+    item.onclick = () => focusSavedPlot(p, true);
+    box.appendChild(item);
+  });
+
+  syncSavedMarkerVisibility(rows);
+}
+
+function syncSavedMarkerVisibility(rows){
+  const visible = new Set(rows.map(p => p.id));
+  savedMarkers.forEach((marker,id) => marker.setVisible(visible.has(id)));
+}
+
+function validCenter(p){
+  return Number.isFinite(Number(p.center_lat)) && Number.isFinite(Number(p.center_lng));
+}
+
+function renderSavedMarkers(){
+  savedMarkers.forEach(m => m.setMap(null));
+  savedMarkers.clear();
+
+  savedPlots.filter(validCenter).forEach(p => {
+    const marker = new google.maps.Marker({
+      position:{lat:Number(p.center_lat),lng:Number(p.center_lng)},
+      map:savedMap,
+      title:`Plot ${p.plot_no}`,
+      label:{
+        text:String(p.plot_no),
+        fontWeight:'700',
+        fontSize:'11px'
+      }
+    });
+
+    marker.addListener('click', () => {
+      activeSavedPlot = p;
+      renderSavedList();
+      openSavedInfoWindow(p, marker);
+      showSavedSummary(p);
+    });
+
+    savedMarkers.set(p.id, marker);
+  });
+}
+
+function fitAllSavedPlots(){
+  if(!savedMap) return;
+  const rows = filteredSavedPlots().filter(validCenter);
+  if(!rows.length) return;
+
+  const bounds = new google.maps.LatLngBounds();
+  rows.forEach(p => bounds.extend({lat:Number(p.center_lat),lng:Number(p.center_lng)}));
+  savedMap.fitBounds(bounds, 50);
+
+  if(rows.length === 1){
+    savedMap.setZoom(19);
+  }
+}
+
+function focusSavedPlot(p, zoom=true){
+  if(!validCenter(p)) return alert(`Plot ${p.plot_no} does not have saved center coordinates.`);
+
+  activeSavedPlot = p;
+  renderSavedList();
+  const pos = {lat:Number(p.center_lat),lng:Number(p.center_lng)};
+  savedMap.panTo(pos);
+  if(zoom) savedMap.setZoom(19);
+
+  const marker = savedMarkers.get(p.id);
+  if(marker) openSavedInfoWindow(p, marker);
+  showSavedSummary(p);
+
+  if(window.innerWidth <= 900){
+    $('savedMap').scrollIntoView({behavior:'smooth',block:'start'});
+  }
+}
+
+function buildDirectionsUrl(p){
+  return `https://www.google.com/maps/dir/?api=1&destination=${Number(p.center_lat).toFixed(8)},${Number(p.center_lng).toFixed(8)}&travelmode=driving`;
+}
+function buildMapUrl(p){
+  return p.google_map_url || `https://www.google.com/maps?q=${Number(p.center_lat).toFixed(8)},${Number(p.center_lng).toFixed(8)}`;
+}
+function openDirections(p){
+  window.open(buildDirectionsUrl(p),'_blank','noopener');
+}
+
+function openSavedInfoWindow(p, marker){
+  const root = document.createElement('div');
+  root.className = 'gm-info';
+
+  const title = document.createElement('div');
+  title.className = 'gm-info-title';
+  title.textContent = `Plot ${p.plot_no}`;
+
+  const meta = document.createElement('div');
+  meta.className = 'gm-info-meta';
+  meta.textContent = `${p.owner || 'Owner not entered'} • Sheet ${p.sheet}`;
+
+  const actions = document.createElement('div');
+  actions.className = 'gm-info-actions';
+
+  const dir = document.createElement('button');
+  dir.className = 'dir';
+  dir.textContent = 'Directions';
+  dir.onclick = () => openDirections(p);
+
+  const details = document.createElement('button');
+  details.textContent = 'Details';
+  details.onclick = () => openDetails(p);
+
+  actions.append(dir,details);
+  root.append(title,meta,actions);
+
+  savedInfoWindow.setContent(root);
+  savedInfoWindow.open({map:savedMap,anchor:marker});
+}
+
+function showSavedSummary(p){
+  $('selectedSummary').classList.remove('hidden');
+  $('summaryPlot').textContent = `Plot ${p.plot_no}`;
+  $('summaryMeta').textContent = ` • ${p.owner || 'Owner not entered'} • Sheet ${p.sheet}`;
+  $('summaryDirections').onclick = () => openDirections(p);
+  $('summaryDetails').onclick = () => openDetails(p);
+}
+
+function openDetails(p){
+  activeSavedPlot = p;
+  $('detailTitle').textContent = `Plot ${p.plot_no}`;
+  $('detailSubtitle').textContent = `${p.owner || 'Owner not entered'} • CS Sheet ${p.sheet}`;
+  $('detailOwner').value = p.owner || '';
+  $('detailLocalName').value = p.local_name || '';
+  $('detailNotes').value = p.notes || '';
+
+  $('detailSurvey').textContent = p.survey || '';
+  $('detailSheet').textContent = p.sheet || '';
+  $('detailPniu').textContent = p.pniu || '—';
+  $('detailPlotId').textContent = p.plot_id || '—';
+  $('detailGisCode').textContent = p.gis_code || '—';
+  $('detailCenter').textContent = validCenter(p) ? `${Number(p.center_lat).toFixed(8)}, ${Number(p.center_lng).toFixed(8)}` : '—';
+  $('detailXY').textContent = (p.seed_x != null && p.seed_y != null) ? `${p.seed_x}, ${p.seed_y}` : '—';
+  $('detailBBox').textContent = [p.xmin,p.ymin,p.xmax,p.ymax].every(v=>v!=null)
+    ? `${p.xmin}, ${p.ymin}, ${p.xmax}, ${p.ymax}` : '—';
+
+  $('detailDirections').onclick = () => openDirections(p);
+  $('detailGoogle').onclick = () => window.open(buildMapUrl(p),'_blank','noopener');
+  $('detailsModal').classList.remove('hidden');
+}
+function closeDetails(){
+  $('detailsModal').classList.add('hidden');
+}
+$('closeDetails').onclick = closeDetails;
+$('detailsModal').addEventListener('click', e => { if(e.target === $('detailsModal')) closeDetails(); });
+
+$('detailSave').onclick = async () => {
+  if(!activeSavedPlot) return;
+  const p = activeSavedPlot;
+  const body = {
+    ...p,
+    owner:$('detailOwner').value.trim(),
+    local_name:$('detailLocalName').value.trim(),
+    notes:$('detailNotes').value.trim(),
+    geometry:p.geometry || null
   };
-
-  const center = plotCenterFromBBox(selectedPlot);
-  selectedPlot.center_lat = center.lat;
-  selectedPlot.center_lng = center.lng;
-  selectedPlot.google_map_url = googleMapUrl(center.lat, center.lng);
-
-  placeSelectionPin(latLng, selectedPlot.plot_no);
-  clearSelectedPolygon();
-  showSelected();
-}
-
-function showSelected(){
-  const p = selectedPlot;
-  if(!p) return;
-  $('plotForm').classList.remove('hidden');
-  $('plotNo').textContent = p.plot_no;
-  $('pniu').textContent = p.pniu || '—';
-  $('plotId').textContent = p.plot_id || '—';
-  $('nativeXY').textContent = `${p.seed_x.toFixed(3)}, ${p.seed_y.toFixed(3)}`;
-
-  let centerLat = p.center_lat, centerLng = p.center_lng;
-  if (!Number.isFinite(Number(centerLat)) || !Number.isFinite(Number(centerLng))) {
-    const center = plotCenterFromBBox(p);
-    centerLat = center.lat;
-    centerLng = center.lng;
-    p.center_lat = centerLat;
-    p.center_lng = centerLng;
-    p.google_map_url = googleMapUrl(centerLat, centerLng);
-  }
-  $('centerLatLng').textContent = `${Number(centerLat).toFixed(8)}, ${Number(centerLng).toFixed(8)}`;
-  const gLink = $('googleMapLink');
-  gLink.href = p.google_map_url || googleMapUrl(Number(centerLat), Number(centerLng));
-  gLink.classList.remove('hidden');
-
-  const m = saved.find(x => String(x.plot_no) === String(p.plot_no) && x.survey === 'CS' && x.sheet === p.sheet);
-  $('deletePlot').disabled = !m;
-  $('owner').value = m?.owner || '';
-  $('localName').value = m?.local_name || '';
-  $('notes').value = m?.notes || '';
-  if(m?.geometry && !p.geometry){
-    p.geometry = m.geometry;
-    p.source = m.source || '';
-    selectedPolygon = drawGeometry(p.geometry,true);
-  }
-  $('status').textContent = `Selected CS plot ${p.plot_no}${p.geometry ? ' • polygon ready' : ''}`;
-}
-
-function drawGeometry(geometry,selected=false){
-  if(!geometry?.coordinates?.[0]) return null;
-  return new google.maps.Polygon({
-    paths:geometry.coordinates[0].map(([lng,lat])=>({lat,lng})),
-    map,
-    strokeWeight:selected?4:2,
-    fillOpacity:selected?.28:.10,
-    clickable:false
-  });
-}
-function clearSelectedPolygon(){ if(selectedPolygon) selectedPolygon.setMap(null); selectedPolygon = null; }
-
-async function reconstruct(){
-  if(!selectedPlot) return;
-  $('status').textContent = `Reconstructing plot ${selectedPlot.plot_no}...`;
-  const body = {...selectedPlot,owner:$('owner').value.trim(),local_name:$('localName').value.trim()};
-  const r = await fetch('/api/reconstruct',{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify(body)
-  });
-  const f = await r.json();
-  if(!r.ok) throw new Error(f.error || 'Reconstruction failed');
-  selectedPlot.geometry = f.geometry;
-  selectedPlot.source = f.properties.source;
-  clearSelectedPolygon();
-  selectedPolygon = drawGeometry(f.geometry,true);
-  $('status').textContent = `Plot ${selectedPlot.plot_no} polygon reconstructed (${f.geometry.coordinates[0].length} points).`;
-}
-
-async function savePlot(){
-  if(!selectedPlot) return;
-  const body = {...selectedPlot,owner:$('owner').value.trim(),local_name:$('localName').value.trim(),notes:$('notes').value.trim()};
   const r = await fetch('/api/plots',{
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify(body)
   });
   const d = await r.json();
-  if(!r.ok) throw new Error(d.error || 'Save failed');
-  await loadSaved();
-  $('deletePlot').disabled = false;
-  $('status').textContent = `Plot ${body.plot_no} saved/updated${body.geometry ? ' with polygon' : ''}.`;
+  if(!r.ok) return alert(d.error || 'Save failed');
+
+  const idx = savedPlots.findIndex(x=>x.id===p.id);
+  if(idx>=0) savedPlots[idx] = d;
+  activeSavedPlot = d;
+
+  populateOwnerFilter();
+  renderSavedList();
+  renderSavedMarkers();
+  focusSavedPlot(d,false);
+  openDetails(d);
+};
+
+$('detailDelete').onclick = async () => {
+  if(!activeSavedPlot) return;
+  const p = activeSavedPlot;
+  if(!confirm(`Delete Plot ${p.plot_no} from our database?\n\nThis does not change BhuNaksha.`)) return;
+
+  const url = `/api/plots/${encodeURIComponent(p.survey)}/${encodeURIComponent(p.sheet)}/${encodeURIComponent(p.plot_no)}`;
+  const r = await fetch(url,{method:'DELETE'});
+  const d = await r.json();
+  if(!r.ok) return alert(d.error || 'Delete failed');
+
+  closeDetails();
+  savedInfoWindow.close();
+  $('selectedSummary').classList.add('hidden');
+  activeSavedPlot = null;
+  await loadSavedPlots();
+};
+
+$('savedSearch').oninput = renderSavedList;
+$('savedSheetFilter').onchange = renderSavedList;
+$('savedOwnerFilter').onchange = renderSavedList;
+$('fitAllSaved').onclick = fitAllSavedPlots;
+
+/* ----------------------------- ADD PLOT ----------------------------- */
+function initAddMap(){
+  addMap = new google.maps.Map($('addMap'), {
+    center:{lat:25.3501,lng:83.9334},
+    zoom:15,
+    mapTypeId:'satellite',
+    tilt:0,
+    streetViewControl:false,
+    fullscreenControl:true,
+    mapTypeControl:true
+  });
+
+  addMap.addListener('click', async e => {
+    try{ await lookupAddPlot(e.latLng); }
+    catch(err){ $('addStatus').textContent = err.message; }
+  });
+
+  addMap.addListener('idle', () => scheduleAddOverlayRefresh(false));
 }
 
+async function loadAddSheetConfig(sheet){
+  currentSheet = String(sheet || '01').padStart(2,'0');
+  $('sheetSelect').value = currentSheet;
+  localStorage.setItem('harpurSheet', currentSheet);
 
-async function deletePlot(){
-  if(!selectedPlot) return;
-
-  const match = saved.find(x =>
-    String(x.plot_no) === String(selectedPlot.plot_no) &&
-    x.survey === selectedPlot.survey &&
-    x.sheet === selectedPlot.sheet
-  );
-
-  if(!match){
-    alert(`Plot ${selectedPlot.plot_no} is not saved in our database yet.`);
-    return;
-  }
-
-  const ok = confirm(
-    `Delete Plot ${selectedPlot.plot_no} from our database?\n\n` +
-    `This will remove its saved owner, local name, notes, Google link and reconstructed polygon.\n` +
-    `It does NOT change anything in BhuNaksha.`
-  );
-  if(!ok) return;
-
-  const url = `/api/plots/${encodeURIComponent(selectedPlot.survey)}/${encodeURIComponent(selectedPlot.sheet)}/${encodeURIComponent(selectedPlot.plot_no)}`;
-  const r = await fetch(url, { method:'DELETE' });
+  const r = await fetch(`/api/config?sheet=${encodeURIComponent(currentSheet)}`);
   const d = await r.json();
-  if(!r.ok) throw new Error(d.error || 'Delete failed');
+  if(!r.ok) throw new Error(d.error || `Could not load Sheet ${currentSheet}`);
+  addConfig = d;
+  $('rawImageLink').href = `/api/bhunaksha-sheet.png?sheet=${encodeURIComponent(currentSheet)}`;
 
-  if(selectedPolygon){
-    selectedPolygon.setMap(null);
-    selectedPolygon = null;
+  if(addMap){
+    fitAddSheet();
+    scheduleAddOverlayRefresh(true);
   }
+}
 
-  selectedPlot.geometry = null;
-  selectedPlot.source = '';
+async function switchAddSheet(sheet){
+  clearAddSelection();
+  lastOverlaySignature = '';
+  if(overlayView){ overlayView.setMap(null); overlayView = null; }
+  $('addStatus').textContent = `Loading CS Sheet ${sheet}…`;
+  await loadAddSheetConfig(sheet);
+  $('addStatus').textContent = `CS Sheet ${currentSheet} loaded. Zoom and click a parcel.`;
+}
 
-  await loadSaved();
-
-  $('owner').value = '';
-  $('localName').value = '';
-  $('notes').value = '';
-  $('deletePlot').disabled = true;
-
-  clearSelectionPin();
-  const deletedPlotNo = selectedPlot.plot_no;
+function clearAddSelection(){
+  if(selectionMarker){ selectionMarker.setMap(null); selectionMarker = null; }
+  if(selectedPolygon){ selectedPolygon.setMap(null); selectedPolygon = null; }
   selectedPlot = null;
   $('plotForm').classList.add('hidden');
-
-  $('status').textContent = `Plot ${deletedPlotNo} deleted from our database. Selection cleared.`;
 }
 
-async function loadSaved(){
-  const r = await fetch('/api/plots');
-  saved = await r.json();
-  renderSaved();
-  redrawSaved();
+function fitAddSheet(){
+  if(!addMap || !addConfig) return;
+  const b = addConfig.googleBounds;
+  addMap.fitBounds(new google.maps.LatLngBounds(
+    {lat:b.south,lng:b.west},
+    {lat:b.north,lng:b.east}
+  ),30);
 }
-function redrawSaved(){
-  savedPolygons.forEach(p=>p.setMap(null));
-  savedPolygons = [];
-  if(!map) return;
-  for(const p of saved){
-    if(p.geometry){
-      const poly = drawGeometry(p.geometry,false);
-      if(poly) savedPolygons.push(poly);
+
+function createBhuNakshaOverlayClass(){
+  return class BhuNakshaImageOverlay extends google.maps.OverlayView{
+    constructor(url,bounds,opacity=.9){
+      super();this.url=url;this.bounds=bounds;this.opacity=opacity;this.div=null;this.img=null;this.loadSeq=0;
+    }
+    onAdd(){
+      this.div=document.createElement('div');this.div.style.position='absolute';
+      this.img=document.createElement('img');this.img.src=this.url;this.img.className='bhu-sheet';
+      this.img.style.cssText=`position:absolute;left:0;top:0;width:100%;height:100%;opacity:${this.opacity}`;
+      this.img.onload=()=>{$('addStatus').textContent=`Cadastral PNG loaded for Sheet ${currentSheet}.`;};
+      this.img.onerror=()=>{$('addStatus').textContent='BhuNaksha PNG temporarily unavailable. Use Refresh PNG or move/zoom slightly.';};
+      this.div.appendChild(this.img);this.getPanes().overlayLayer.appendChild(this.div);
+    }
+    draw(){
+      if(!this.div)return;const p=this.getProjection();if(!p)return;
+      const sw=p.fromLatLngToDivPixel(new google.maps.LatLng(this.bounds.south,this.bounds.west));
+      const ne=p.fromLatLngToDivPixel(new google.maps.LatLng(this.bounds.north,this.bounds.east));
+      if(!sw||!ne)return;
+      this.div.style.left=sw.x+'px';this.div.style.top=ne.y+'px';
+      this.div.style.width=(ne.x-sw.x)+'px';this.div.style.height=(sw.y-ne.y)+'px';
+    }
+    onRemove(){if(this.div?.parentNode)this.div.parentNode.removeChild(this.div);this.div=null;this.img=null;}
+    setOpacity(v){this.opacity=v;if(this.img)this.img.style.opacity=String(v);}
+    update(url,bounds){
+      const seq=++this.loadSeq;const candidate=new Image();
+      candidate.className='bhu-sheet';
+      candidate.style.cssText=`position:absolute;left:0;top:0;width:100%;height:100%;opacity:${this.opacity}`;
+      candidate.onload=()=>{
+        if(seq!==this.loadSeq||!this.div)return;
+        const old=this.img;this.url=url;this.bounds=bounds;this.img=candidate;
+        if(old&&old.parentNode===this.div)this.div.replaceChild(candidate,old);else this.div.appendChild(candidate);
+        this.draw();$('addStatus').textContent=`Cadastral PNG refreshed for Sheet ${currentSheet}, zoom ${addMap?.getZoom()??''}.`;
+      };
+      candidate.onerror=()=>{
+        if(seq!==this.loadSeq)return;
+        $('addStatus').textContent='Cadastral refresh failed temporarily — keeping the previous BhuNaksha image.';
+      };
+      candidate.src=url;
     }
   }
 }
-function renderSaved(){
-  const f = $('filter').value.toLowerCase(), box = $('savedPlots');
-  box.innerHTML = '';
-  saved.filter(p => `${p.plot_no} ${p.owner} ${p.local_name}`.toLowerCase().includes(f))
-    .forEach(p => {
-      const el = document.createElement('div');
-      el.className = 'saved';
-      el.innerHTML = `<div class="saved-title">Plot ${p.plot_no}</div>
-      <div class="saved-sub">${p.owner || 'No owner'}${p.local_name ? ' • ' + p.local_name : ''}${p.geometry ? ' • polygon saved' : ''}${p.google_map_url ? ' • Google link' : ''}</div>`;
-      el.onclick = () => selectSaved(p).catch(err=>alert(err.message));
-      box.appendChild(el);
-    });
+let BhuNakshaImageOverlay = null;
+
+function nativeBBoxToLatLngBounds(b){
+  const corners=[[b.xmin,b.ymin],[b.xmax,b.ymax],[b.xmin,b.ymax],[b.xmax,b.ymin]]
+    .map(c=>proj4('EPSG:32645','EPSG:4326',c));
+  const lats=corners.map(c=>c[1]),lngs=corners.map(c=>c[0]);
+  return{south:Math.min(...lats),north:Math.max(...lats),west:Math.min(...lngs),east:Math.max(...lngs)};
 }
-async function selectSaved(p){
-  if(p.sheet && p.sheet!==currentSheet){$('sheetSelect').value=p.sheet;await switchSheet(p.sheet);}
-  selectedPlot = {
-    survey:p.survey,sheet:p.sheet,state:'10',gis_code:p.gis_code,levels:p.levels,
-    plot_no:p.plot_no,plot_id:p.plot_id,pniu:p.pniu,seed_x:p.seed_x,seed_y:p.seed_y,
-    xmin:p.xmin,ymin:p.ymin,xmax:p.xmax,ymax:p.ymax,
-    center_lat:p.center_lat,center_lng:p.center_lng,google_map_url:p.google_map_url,
-    geometry:p.geometry,source:p.source
+function intersectBBox(a,b){
+  const r={xmin:Math.max(a.xmin,b.xmin),ymin:Math.max(a.ymin,b.ymin),xmax:Math.min(a.xmax,b.xmax),ymax:Math.min(a.ymax,b.ymax)};
+  return r.xmax>r.xmin&&r.ymax>r.ymin?r:null;
+}
+function currentAddViewportNativeBBox(){
+  const bounds=addMap?.getBounds();if(!bounds||!addConfig)return null;
+  const ne=bounds.getNorthEast(),sw=bounds.getSouthWest();
+  const pts=[
+    [ne.lng(),ne.lat()],[sw.lng(),sw.lat()],[sw.lng(),ne.lat()],[ne.lng(),sw.lat()]
+  ].map(p=>proj4('EPSG:4326','EPSG:32645',p));
+  const view={xmin:Math.min(...pts.map(p=>p[0])),ymin:Math.min(...pts.map(p=>p[1])),xmax:Math.max(...pts.map(p=>p[0])),ymax:Math.max(...pts.map(p=>p[1]))};
+  return intersectBBox(view,addConfig.imageBBox);
+}
+function currentAddImageSize(){
+  const rect=$('addMap').getBoundingClientRect();const dpr=Math.min(window.devicePixelRatio||1,1.5);
+  return{width:Math.min(2200,Math.max(512,Math.round(rect.width*dpr))),height:Math.min(2200,Math.max(512,Math.round(rect.height*dpr)))};
+}
+function addOverlaySignature(b,s){
+  return[addMap?.getZoom()||'',currentSheet,b.xmin.toFixed(2),b.ymin.toFixed(2),b.xmax.toFixed(2),b.ymax.toFixed(2),s.width,s.height].join('|');
+}
+function refreshAddOverlay(force=false){
+  if(!addMap||!addConfig)return;
+  if(!$('showNaksha').checked){if(overlayView){overlayView.setMap(null);overlayView=null;}return;}
+
+  const bbox=currentAddViewportNativeBBox();
+  if(!bbox)return;
+
+  const size=currentAddImageSize(), sig=addOverlaySignature(bbox,size);
+  if(!force&&sig===lastOverlaySignature)return;
+  lastOverlaySignature=sig;
+
+  const q=new URLSearchParams({...bbox,width:size.width,height:size.height,sheet:currentSheet,t:Date.now()});
+  const url=`/api/viewport-overlay.png?${q}`;
+  const bounds=nativeBBoxToLatLngBounds(bbox);
+
+  if(!BhuNakshaImageOverlay)BhuNakshaImageOverlay=createBhuNakshaOverlayClass();
+  if(!overlayView){
+    overlayView=new BhuNakshaImageOverlay(url,bounds,Number($('opacity').value)/100);
+    overlayView.setMap(addMap);
+  }else{
+    overlayView.update(url,bounds);overlayView.setOpacity(Number($('opacity').value)/100);
+  }
+  $('addStatus').textContent=`Refreshing cadastral PNG for Sheet ${currentSheet}…`;
+}
+function scheduleAddOverlayRefresh(force=false){
+  clearTimeout(addRefreshTimer);
+  addRefreshTimer=setTimeout(()=>refreshAddOverlay(force),650);
+}
+
+function placeAddPin(latLng,label=''){
+  if(selectionMarker){selectionMarker.setMap(null);selectionMarker=null;}
+  selectionMarker=new google.maps.Marker({
+    position:latLng,map:addMap,title:label?`Selected plot ${label}`:'Selected location',
+    label:label?{text:String(label),fontWeight:'700'}:undefined,
+    animation:google.maps.Animation.DROP,zIndex:999
+  });
+}
+
+async function lookupAddPlot(latLng){
+  placeAddPin(latLng);
+  const [x,y]=proj4('EPSG:4326','EPSG:32645',[latLng.lng(),latLng.lat()]);
+  $('addStatus').textContent='Identifying BhuNaksha plot…';
+
+  const q=new URLSearchParams({x:String(x),y:String(y),sheet:currentSheet});
+  const r=await fetch(`/api/plot-at-xy?${q}`);
+  const data=await r.json();
+  if(!r.ok)throw new Error(data.error||'Plot lookup failed');
+  const s=data.scalar;
+  if(!s||s.has_data!=='Y')throw new Error('No BhuNaksha plot found at this click.');
+
+  selectedPlot={
+    survey:'CS',sheet:currentSheet,state:'10',gis_code:addConfig.gisCode,levels:addConfig.levels,
+    plot_no:String(s.plotNo||data.hit?.kide||''),plot_id:String(s.ID||data.hit?.id||''),
+    pniu:String(s.PNIU||''),seed_x:x,seed_y:y,xmin:s.xmin,ymin:s.ymin,xmax:s.xmax,ymax:s.ymax,
+    geometry:null,source:''
   };
-  const sw = proj4('EPSG:32645','EPSG:4326',[p.xmin,p.ymin]);
-  const ne = proj4('EPSG:32645','EPSG:4326',[p.xmax,p.ymax]);
-  map.fitBounds(new google.maps.LatLngBounds({lat:sw[1],lng:sw[0]},{lat:ne[1],lng:ne[0]}),80);
 
-  const centerLat = Number(p.center_lat);
-  const centerLng = Number(p.center_lng);
-  if(Number.isFinite(centerLat) && Number.isFinite(centerLng)){
-    placeSelectionPin({lat:centerLat,lng:centerLng}, p.plot_no);
-  } else {
-    const center = plotCenterFromBBox(p);
-    placeSelectionPin(center, p.plot_no);
-  }
+  const center=plotCenterFromBBox(selectedPlot);
+  selectedPlot.center_lat=center.lat;selectedPlot.center_lng=center.lng;
+  selectedPlot.google_map_url=mapUrl(center.lat,center.lng);
 
-  clearSelectedPolygon();
-  if(p.geometry) selectedPolygon = drawGeometry(p.geometry,true);
-  showSelected();
+  placeAddPin(latLng,selectedPlot.plot_no);
+  showAddSelected();
 }
 
-async function loadGoogleMaps(){
-  $('status').textContent = 'Loading Google Maps...';
-  if (!config) {
-    try { await loadConfig(); } catch(err) { $('status').textContent = err.message; return; }
+function plotCenterFromBBox(p){
+  const x=(Number(p.xmin)+Number(p.xmax))/2,y=(Number(p.ymin)+Number(p.ymax))/2;
+  const [lng,lat]=proj4('EPSG:32645','EPSG:4326',[x,y]);
+  return{lat,lng};
+}
+function mapUrl(lat,lng){return`https://www.google.com/maps?q=${lat.toFixed(8)},${lng.toFixed(8)}`;}
+
+function showAddSelected(){
+  const p=selectedPlot;if(!p)return;
+  $('plotForm').classList.remove('hidden');
+  $('plotNo').textContent=p.plot_no;$('plotSheet').textContent=p.sheet;$('pniu').textContent=p.pniu||'—';
+  $('plotId').textContent=p.plot_id||'—';$('nativeXY').textContent=`${p.seed_x.toFixed(3)}, ${p.seed_y.toFixed(3)}`;
+  $('centerLatLng').textContent=`${Number(p.center_lat).toFixed(8)}, ${Number(p.center_lng).toFixed(8)}`;
+  $('googleMapLink').href=p.google_map_url;$('googleMapLink').classList.remove('hidden');
+
+  const existing=savedPlots.find(x=>String(x.plot_no)===String(p.plot_no)&&x.survey==='CS'&&x.sheet===p.sheet);
+  $('owner').value=existing?.owner||'';$('localName').value=existing?.local_name||'';$('notes').value=existing?.notes||'';
+  $('deletePlot').disabled=!existing;
+
+  if(existing?.geometry){
+    p.geometry=existing.geometry;p.source=existing.source||'';
+    drawSelectedGeometry(p.geometry);
   }
-  const key = $('apiKey').value.trim();
-  if(!key) return alert('Paste Google Maps JavaScript API key first.');
-  localStorage.setItem('harpurGoogleKey',key);
-  if(window.google?.maps) return initMap();
-  const s = document.createElement('script');
-  s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&callback=initMap`;
-  s.async = true;
-  s.defer = true;
-  s.onerror = () => { $('status').textContent = 'Google Maps JavaScript API failed to load. Check API key / billing / Maps JavaScript API enablement.'; };
-  document.head.appendChild(s);
+  $('addStatus').textContent=`Selected CS Sheet ${p.sheet}, Plot ${p.plot_no}.`;
+}
+function drawSelectedGeometry(geometry){
+  if(selectedPolygon){selectedPolygon.setMap(null);selectedPolygon=null;}
+  if(!geometry?.coordinates?.[0])return;
+  selectedPolygon=new google.maps.Polygon({
+    paths:geometry.coordinates[0].map(([lng,lat])=>({lat,lng})),map:addMap,
+    strokeWeight:4,fillOpacity:.28,clickable:false
+  });
 }
 
-window.initMap = async function(){
-  try{
-    currentSheet=localStorage.getItem('harpurSheet')||'01'; $('sheetSelect').value=currentSheet;
-    await loadConfig(); updateRawImageLink();
-    map = new google.maps.Map($('map'),{
-      center:{lat:25.3501,lng:83.9334},
-      zoom:15,
-      mapTypeId:'satellite',
-      tilt:0,
-      streetViewControl:false,
-      fullscreenControl:true,
-      mapTypeControl:true
-    });
-
-    map.addListener('click', async e => {
-      try { await lookupPlot(e.latLng); }
-      catch(err) { $('status').textContent = err.message; }
-    });
-
-    map.addListener('idle', () => scheduleViewportRefresh(false));
-
-    fitSheet();
-    scheduleViewportRefresh(true);
-    redrawSaved();
-  }catch(err){
-    $('status').textContent = err.message;
-  }
+$('reconstruct').onclick=async()=>{
+  if(!selectedPlot)return;
+  $('addStatus').textContent=`Reconstructing Plot ${selectedPlot.plot_no}…`;
+  const r=await fetch('/api/reconstruct',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({...selectedPlot,owner:$('owner').value.trim(),local_name:$('localName').value.trim()})
+  });
+  const f=await r.json();if(!r.ok)return alert(f.error||'Reconstruction failed');
+  selectedPlot.geometry=f.geometry;selectedPlot.source=f.properties.source;drawSelectedGeometry(f.geometry);
+  $('addStatus').textContent=`Plot ${selectedPlot.plot_no} polygon reconstructed.`;
 };
 
-$('loadGoogle').onclick = loadGoogleMaps;
-$('fitSheet').onclick = () => { fitSheet(); scheduleViewportRefresh(true); };
-$('reloadSheet').onclick = () => scheduleViewportRefresh(true);
-$('showNaksha').onchange = () => scheduleViewportRefresh(true);
-$('sheetSelect').onchange = e => switchSheet(e.target.value).catch(err=>{ $('status').textContent=err.message; alert(err.message); });
-$('opacity').oninput = e => {
-  $('opacityValue').textContent = `${e.target.value}%`;
-  overlayView?.setOpacity(Number(e.target.value) / 100);
+$('savePlot').onclick=async()=>{
+  if(!selectedPlot)return;
+  const body={...selectedPlot,owner:$('owner').value.trim(),local_name:$('localName').value.trim(),notes:$('notes').value.trim()};
+  const r=await fetch('/api/plots',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const d=await r.json();if(!r.ok)return alert(d.error||'Save failed');
+  $('deletePlot').disabled=false;
+  $('addStatus').textContent=`Plot ${body.plot_no} saved/updated.`;
+  await loadSavedPlots();
 };
-$('reconstruct').onclick = () => reconstruct().catch(err=>alert(err.message));
-$('savePlot').onclick = () => savePlot().catch(err=>alert(err.message));
-$('deletePlot').onclick = () => deletePlot().catch(err=>alert(err.message));
-$('filter').oninput = renderSaved;
-$('apiKey').value = localStorage.getItem('harpurGoogleKey') || '';
-currentSheet=localStorage.getItem('harpurSheet')||'01'; $('sheetSelect').value=currentSheet; updateRawImageLink();
-loadSaved().catch(console.error);
 
+$('deletePlot').onclick=async()=>{
+  if(!selectedPlot)return;
+  const existing=savedPlots.find(x=>String(x.plot_no)===String(selectedPlot.plot_no)&&x.survey===selectedPlot.survey&&x.sheet===selectedPlot.sheet);
+  if(!existing)return alert(`Plot ${selectedPlot.plot_no} is not saved yet.`);
+  if(!confirm(`Delete Plot ${selectedPlot.plot_no} from our database?\n\nThis does not change BhuNaksha.`))return;
 
-async function loadAboutVersion(){
-  try{
-    const r = await fetch('/api/about');
-    const d = await r.json();
-    if(r.ok && d.version){
-      const el = document.getElementById('appVersion');
-      if(el) el.textContent = `Version ${d.release || d.version}`;
-    }
-  }catch(_){}
+  const url=`/api/plots/${encodeURIComponent(selectedPlot.survey)}/${encodeURIComponent(selectedPlot.sheet)}/${encodeURIComponent(selectedPlot.plot_no)}`;
+  const r=await fetch(url,{method:'DELETE'});const d=await r.json();if(!r.ok)return alert(d.error||'Delete failed');
+  clearAddSelection();$('addStatus').textContent=`Plot ${existing.plot_no} deleted from database.`;
+  await loadSavedPlots();
+};
+
+$('sheetSelect').value=currentSheet;
+$('sheetSelect').onchange=e=>switchAddSheet(e.target.value).catch(err=>alert(err.message));
+$('showNaksha').onchange=()=>scheduleAddOverlayRefresh(true);
+$('opacity').oninput=e=>{$('opacityValue').textContent=`${e.target.value}%`;overlayView?.setOpacity(Number(e.target.value)/100);};
+$('fitSheet').onclick=fitAddSheet;
+$('reloadSheet').onclick=()=>scheduleAddOverlayRefresh(true);
+
+/* ----------------------------- UTIL ----------------------------- */
+function escapeHtml(s){
+  return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
-loadAboutVersion();
+
+bootstrap();

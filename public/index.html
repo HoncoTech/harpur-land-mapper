@@ -1,88 +1,247 @@
-
 <!doctype html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Harpur Land Mapper V5.6.1</title>
+<title>Harpur Land Mapper V6.0</title>
 <link rel="stylesheet" href="styles.css"/>
 <script src="https://cdn.jsdelivr.net/npm/proj4@2.15.0/dist/proj4.js"></script>
 </head>
 <body>
-<div id="app">
-  <aside>
-    <h2>Harpur Land Mapper V5.6.1</h2>
-    <div class="small">Dynamic cadastral overlay • Plot CRUD • Google Maps links</div>
-    <div class="version-row">
-      <span id="appVersion">Version 5.6.1</span>
-      <a href="/about.html" target="_blank" rel="noopener">About</a>
+<div id="shell">
+  <header class="topbar">
+    <div class="brand-wrap">
+      <button id="hamburger" class="icon-btn hamburger" aria-label="Open menu">☰</button>
+      <div>
+        <div class="brand">Harpur Land Mapper</div>
+        <div class="brand-sub">Harpur(199) • Rajpur • Buxar</div>
+      </div>
     </div>
 
-    <label>Google Maps API key</label>
-    <div class="row">
-      <input id="apiKey" type="password" placeholder="Paste API key"/>
-      <button id="loadGoogle">Load</button>
+    <nav id="desktopNav" class="desktop-nav">
+      <button class="nav-link active" data-view="saved">Saved Plots</button>
+      <button class="nav-link" data-view="add">Add Plot</button>
+      <button class="nav-link" data-view="about">About</button>
+    </nav>
+
+    <div class="version-pill">v6.0</div>
+  </header>
+
+  <div id="mobileBackdrop" class="mobile-backdrop hidden"></div>
+  <aside id="mobileMenu" class="mobile-menu">
+    <div class="mobile-menu-head">
+      <b>Harpur Land Mapper</b>
+      <button id="closeMenu" class="icon-btn" aria-label="Close menu">×</button>
     </div>
-
-    <label>CS Map Sheet</label>
-    <select id="sheetSelect">
-      <option value="01">Sheet 01</option>
-      <option value="02">Sheet 02</option>
-    </select>
-
-    <label class="check">
-      <input id="showNaksha" type="checkbox" checked/>
-      Show BhuNaksha sheet
-    </label>
-
-    <label>BhuNaksha opacity <span id="opacityValue">90%</span></label>
-    <input id="opacity" type="range" min="0" max="100" value="90"/>
-
-    <div class="buttons">
-      <button id="fitSheet">Fit BhuNaksha sheet</button>
-      <button id="reloadSheet">Refresh now</button>
-    </div>
-
-    <a id="rawImageLink" href="/api/bhunaksha-sheet.png" target="_blank">Open raw full-sheet PNG</a>
-
-    <hr/>
-
-    <h3>Selected plot</h3>
-    <div id="status">Load the map, zoom the BhuNaksha image, read a plot number, then click inside that plot.</div>
-
-    <div id="plotForm" class="hidden">
-      <div class="kv"><b>Plot</b><span id="plotNo"></span></div>
-      <div class="kv"><b>PNIU</b><span id="pniu"></span></div>
-      <div class="kv"><b>Plot ID</b><span id="plotId" class="mono"></span></div>
-      <div class="kv"><b>Native XY</b><span id="nativeXY" class="mono"></span></div>
-      <div class="kv"><b>Center</b><span id="centerLatLng" class="mono"></span></div>
-      <a id="googleMapLink" class="map-link hidden" target="_blank" rel="noopener">Open plot center in Google Maps</a>
-
-      <label>Owner / family</label>
-      <input id="owner" placeholder="Roy family"/>
-
-      <label>Local name</label>
-      <input id="localName" placeholder="Tari / Pari / etc."/>
-
-      <label>Notes</label>
-      <textarea id="notes" rows="3"></textarea>
-
-      <button id="reconstruct" class="primary">Reconstruct polygon</button>
-      <button id="savePlot" class="primary">Save / Update Plot</button>
-      <button id="deletePlot" class="danger">Delete Plot</button>
-    </div>
-
-    <hr/>
-    <h3>Saved plots</h3>
-    <input id="filter" placeholder="Search plot / owner / local name"/>
-    <div id="savedPlots"></div>
+    <button class="mobile-nav-link active" data-view="saved">Saved Plots</button>
+    <button class="mobile-nav-link" data-view="add">Add Plot</button>
+    <button class="mobile-nav-link" data-view="about">About</button>
   </aside>
 
-  <main>
-    <div id="map"></div>
-    <div class="map-badge">Click parcel → pin appears → verify plot → save/update/delete</div>
+  <main id="content">
+    <!-- SAVED PLOTS: default landing page -->
+    <section id="view-saved" class="view active">
+      <div class="saved-layout">
+        <aside class="master-pane">
+          <div class="pane-title-row">
+            <div>
+              <h2>Saved Plots</h2>
+              <div id="savedCount" class="muted">Loading…</div>
+            </div>
+            <button id="fitAllSaved" class="secondary compact">Fit all</button>
+          </div>
+
+          <div class="filters">
+            <input id="savedSearch" placeholder="Search plot / owner / notes"/>
+            <div class="filter-grid">
+              <select id="savedSheetFilter">
+                <option value="">All sheets</option>
+                <option value="01">Sheet 01</option>
+                <option value="02">Sheet 02</option>
+              </select>
+              <select id="savedOwnerFilter">
+                <option value="">All owners</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="savedList" class="saved-list"></div>
+        </aside>
+
+        <section class="detail-map-pane">
+          <div id="savedMap" class="map"></div>
+          <div class="map-caption">Google Satellite • Saved database plots only</div>
+
+          <div id="selectedSummary" class="selected-summary hidden">
+            <div>
+              <b id="summaryPlot">Plot</b>
+              <span id="summaryMeta" class="muted"></span>
+            </div>
+            <div class="summary-actions">
+              <button id="summaryDirections" class="primary compact">Directions</button>
+              <button id="summaryDetails" class="secondary compact">Details</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <!-- ADD PLOT: existing cadastral workflow moved here -->
+    <section id="view-add" class="view">
+      <div class="add-layout">
+        <aside class="add-pane">
+          <h2>Add Plot</h2>
+          <p class="muted add-intro">Use BhuNaksha to identify a cadastral parcel, verify it against Google Satellite, then save it.</p>
+
+          <label>CS Map Sheet</label>
+          <select id="sheetSelect">
+            <option value="01">Sheet 01</option>
+            <option value="02">Sheet 02</option>
+          </select>
+
+          <label class="check">
+            <input id="showNaksha" type="checkbox" checked/>
+            Show BhuNaksha sheet
+          </label>
+
+          <label>BhuNaksha opacity <span id="opacityValue">90%</span></label>
+          <input id="opacity" type="range" min="0" max="100" value="90"/>
+
+          <div class="button-grid">
+            <button id="fitSheet" class="secondary">Fit sheet</button>
+            <button id="reloadSheet" class="secondary">Refresh PNG</button>
+          </div>
+
+          <a id="rawImageLink" class="text-link" href="/api/bhunaksha-sheet.png?sheet=01" target="_blank" rel="noopener">Open raw cadastral PNG</a>
+
+          <div class="section-divider"></div>
+
+          <h3>Selected Plot</h3>
+          <div id="addStatus" class="status-box">Open Add Plot, zoom the cadastral map, and click inside a parcel.</div>
+
+          <div id="plotForm" class="hidden">
+            <div class="kv"><b>Plot</b><span id="plotNo"></span></div>
+            <div class="kv"><b>Sheet</b><span id="plotSheet"></span></div>
+            <div class="kv"><b>PNIU</b><span id="pniu"></span></div>
+            <div class="kv"><b>Plot ID</b><span id="plotId" class="mono"></span></div>
+            <div class="kv"><b>Native XY</b><span id="nativeXY" class="mono"></span></div>
+            <div class="kv"><b>Center</b><span id="centerLatLng" class="mono"></span></div>
+
+            <a id="googleMapLink" class="action-link hidden" target="_blank" rel="noopener">Open plot center in Google Maps</a>
+
+            <label>Owner / family</label>
+            <input id="owner" placeholder="Owner / family"/>
+
+            <label>Local name</label>
+            <input id="localName" placeholder="Tari / Pari / road side / etc."/>
+
+            <label>Notes</label>
+            <textarea id="notes" rows="3"></textarea>
+
+            <button id="reconstruct" class="secondary full">Reconstruct polygon</button>
+            <button id="savePlot" class="primary full">Save / Update Plot</button>
+            <button id="deletePlot" class="danger full">Delete Plot</button>
+          </div>
+        </aside>
+
+        <section class="add-map-pane">
+          <div id="addMap" class="map"></div>
+          <div class="map-caption">Google Satellite + active BhuNaksha sheet</div>
+        </section>
+      </div>
+    </section>
+
+    <!-- ABOUT -->
+    <section id="view-about" class="view">
+      <div class="about-wrap">
+        <div class="about-card">
+          <h1>Harpur Land Mapper</h1>
+          <div class="version-badge">Version 6.0</div>
+          <p>
+            Family land-mapping application for browsing saved plots on Google Satellite
+            and adding/verifying parcels from Bihar BhuNaksha.
+          </p>
+
+          <h3>Navigation</h3>
+          <div class="about-grid">
+            <div><b>Saved Plots</b><span>Default master-detail database browser. No BhuNaksha dependency.</span></div>
+            <div><b>Add Plot</b><span>Cadastral data-entry workflow using Google Satellite + BhuNaksha.</span></div>
+            <div><b>About</b><span>Application information and version.</span></div>
+          </div>
+
+          <h3>Saved Plot workflow</h3>
+          <ul>
+            <li>All database plots with valid center coordinates appear as pins.</li>
+            <li>Select a plot from the master list to navigate directly to its pin.</li>
+            <li>Tap a pin to see plot number, owner, sheet, Directions and Details.</li>
+            <li>Directions opens Google Maps with the saved plot as destination; Google Maps can use the user's current location.</li>
+          </ul>
+
+          <h3>Important</h3>
+          <p class="muted">
+            This application is for family reference, visual matching and record keeping.
+            Reconstructed parcel geometry and satellite alignment are not an official legal survey.
+          </p>
+        </div>
+      </div>
+    </section>
   </main>
 </div>
+
+<!-- First-run Google API key prompt. Hidden automatically when GOOGLE_MAPS_API_KEY is configured on server. -->
+<div id="keyModal" class="modal hidden">
+  <div class="modal-card small-modal">
+    <h2>Google Maps Setup</h2>
+    <p class="muted">A Google Maps JavaScript API key is required to display the maps.</p>
+    <input id="apiKey" type="password" placeholder="Google Maps API key"/>
+    <button id="loadGoogle" class="primary full">Load Maps</button>
+  </div>
+</div>
+
+<!-- Saved plot details -->
+<div id="detailsModal" class="modal hidden">
+  <div class="modal-card details-card">
+    <div class="modal-head">
+      <div>
+        <h2 id="detailTitle">Plot</h2>
+        <div id="detailSubtitle" class="muted"></div>
+      </div>
+      <button id="closeDetails" class="icon-btn" aria-label="Close details">×</button>
+    </div>
+
+    <div class="details-columns">
+      <section>
+        <h3>General</h3>
+        <label>Owner / family</label>
+        <input id="detailOwner"/>
+        <label>Local name</label>
+        <input id="detailLocalName"/>
+        <label>Notes</label>
+        <textarea id="detailNotes" rows="5"></textarea>
+
+        <div class="button-grid detail-actions">
+          <button id="detailDirections" class="primary">Directions</button>
+          <button id="detailGoogle" class="secondary">Open Google Maps</button>
+        </div>
+        <button id="detailSave" class="primary full">Save / Update</button>
+        <button id="detailDelete" class="danger full">Delete Plot</button>
+      </section>
+
+      <section class="technical-card">
+        <h3>Technical</h3>
+        <div class="kv"><b>Survey</b><span id="detailSurvey"></span></div>
+        <div class="kv"><b>Sheet</b><span id="detailSheet"></span></div>
+        <div class="kv"><b>PNIU</b><span id="detailPniu" class="mono"></span></div>
+        <div class="kv"><b>Plot ID</b><span id="detailPlotId" class="mono"></span></div>
+        <div class="kv"><b>GIS Code</b><span id="detailGisCode" class="mono"></span></div>
+        <div class="kv"><b>Center</b><span id="detailCenter" class="mono"></span></div>
+        <div class="kv"><b>Native XY</b><span id="detailXY" class="mono"></span></div>
+        <div class="kv"><b>BBox</b><span id="detailBBox" class="mono"></span></div>
+      </section>
+    </div>
+  </div>
+</div>
+
 <script src="app.js"></script>
 </body>
 </html>
