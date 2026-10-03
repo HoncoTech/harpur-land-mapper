@@ -1,0 +1,36 @@
+{
+  "schema_version": "2.0-map-first",
+  "source_db": "harpur-new-schema.sqlite",
+  "output_db": "harpur-schema-v2-map-first.sqlite",
+  "plots_before": 52,
+  "plots_after": 52,
+  "integrity_check": "ok",
+  "missing_legacy_columns": [],
+  "backward_compatible_on_schema_columns": true,
+  "hierarchy_seeded": {
+    "state": "10 Bihar",
+    "district": "30 BUXAR",
+    "subdivision": "01 बक्सर",
+    "circle": "02 Rajpur",
+    "village": "0230 Harpur(199)",
+    "survey_map": "CS / 06 CS Map",
+    "sheets": [
+      "01",
+      "02"
+    ]
+  },
+  "local_areas_seeded_without_geometry": [
+    "Tari",
+    "Pariya",
+    "Patelwa"
+  ],
+  "notes": [
+    "Migration is additive: no existing plots columns were removed or renamed.",
+    "All existing 52 plot rows were preserved.",
+    "Existing plots were linked to Harpur/CS hierarchy based on current survey/sheet values.",
+    "RS structure is supported by schema but no RS GIS data was invented.",
+    "Tari/Pariya/Patelwa were added as local areas with geometry left NULL.",
+    "No family/owner normalization or location membership was guessed.",
+    "No passwords/PINs were created."
+  ]
+}
