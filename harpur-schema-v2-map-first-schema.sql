@@ -134,7 +134,7 @@ CREATE TABLE plots (
   geometry_geojson TEXT,
   source TEXT DEFAULT '',
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT DEFAULT CURRENT_TIMESTAMP, map_instance TEXT, mauza TEXT, thana_no TEXT, jamabandi_no TEXT, part_no TEXT, page_no TEXT, computerized_jamabandi_no TEXT, khata_no TEXT, khesra_no TEXT, plot_area_decimal REAL, jamabandi_total_area_decimal REAL, exact_raiyat_name TEXT, ownership_type TEXT, family_id INTEGER, primary_family_member_id INTEGER, location_id INTEGER, village_id INTEGER, survey_map_id INTEGER, sheet_id INTEGER, geometry_type TEXT, geometry_source TEXT, geometry_updated_at TEXT, calculated_area_sqm REAL, calculated_area_decimal REAL, perimeter_m REAL, approx_length_m REAL, approx_width_m REAL, bbox_width_m REAL, bbox_height_m REAL, bbox_area_sqm REAL, measurement_source TEXT, measurement_updated_at TEXT,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP, map_instance TEXT, mauza TEXT, thana_no TEXT, jamabandi_no TEXT, part_no TEXT, page_no TEXT, computerized_jamabandi_no TEXT, khata_no TEXT, khesra_no TEXT, plot_area_decimal REAL, jamabandi_total_area_decimal REAL, exact_raiyat_name TEXT, land_type TEXT, ownership_type TEXT, family_id INTEGER, primary_family_member_id INTEGER, location_id INTEGER, village_id INTEGER, survey_map_id INTEGER, sheet_id INTEGER, geometry_type TEXT, geometry_source TEXT, geometry_updated_at TEXT, calculated_area_sqm REAL, calculated_area_decimal REAL, perimeter_m REAL, approx_length_m REAL, approx_width_m REAL, bbox_width_m REAL, bbox_height_m REAL, bbox_area_sqm REAL, measurement_source TEXT, measurement_updated_at TEXT,
   UNIQUE(survey, sheet, plot_no)
 );
 

@@ -1,5 +1,5 @@
 {
-  "schema_version": "2.0-map-first",
+  "schema_version": "2.1-map-first-ownership",
   "source_db": "harpur-new-schema.sqlite",
   "output_db": "harpur-schema-v2-map-first.sqlite",
   "plots_before": 52,
@@ -30,7 +30,11 @@
     "Existing plots were linked to Harpur/CS hierarchy based on current survey/sheet values.",
     "RS structure is supported by schema but no RS GIS data was invented.",
     "Tari/Pariya/Patelwa were added as local areas with geometry left NULL.",
-    "No family/owner normalization or location membership was guessed.",
-    "No passwords/PINs were created."
-  ]
+    "No passwords/PINs were created.",
+    "V7.1 seeds the user-provided family member master for Individual/Joint ownership selection; no existing plot ownership was auto-assigned.",
+    "land_type is additive and supports Agriculture, Dih/Village Land, and Other in the UI."
+  ],
+  "family_master_seeded": "Anand Narayan Rai Family",
+  "family_members_seeded": 6,
+  "plot_land_type_added": true
 }

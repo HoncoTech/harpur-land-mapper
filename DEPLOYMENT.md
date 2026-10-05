@@ -1,3 +1,7 @@
+## Harpur Land Mapper V7.1
+
+Map-first Add Plot UI with dynamic CS/RS loading and ownership/land-type fields.
+
 # Deployment — V6.0
 
 ## Render

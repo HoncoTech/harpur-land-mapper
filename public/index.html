@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Harpur Land Mapper V6.5</title>
+<title>Harpur Land Mapper V7.5</title>
 <link rel="stylesheet" href="styles.css"/>
 <script src="https://cdn.jsdelivr.net/npm/proj4@2.15.0/dist/proj4.js"></script>
 </head>
@@ -19,12 +19,12 @@
     </div>
 
     <nav id="desktopNav" class="desktop-nav">
-      <button class="nav-link active" data-view="saved">Saved Plots</button>
-      <button class="nav-link" data-view="add">Add Plot</button>
+      <button class="nav-link active" data-view="saved">Family Plots</button>
+      <button class="nav-link" data-view="add">Add Family Plot</button>
       <button class="nav-link" data-view="about">About</button>
     </nav>
 
-    <div class="version-pill">v6.5</div>
+    <div class="version-pill">v7.5</div>
   </header>
 
   <div id="mobileBackdrop" class="mobile-backdrop hidden"></div>
@@ -33,8 +33,8 @@
       <b>Harpur Land Mapper</b>
       <button id="closeMenu" class="icon-btn" aria-label="Close menu">×</button>
     </div>
-    <button class="mobile-nav-link active" data-view="saved">Saved Plots</button>
-    <button class="mobile-nav-link" data-view="add">Add Plot</button>
+    <button class="mobile-nav-link active" data-view="saved">Family Plots</button>
+    <button class="mobile-nav-link" data-view="add">Add Family Plot</button>
     <button class="mobile-nav-link" data-view="about">About</button>
   </aside>
 
@@ -45,14 +45,19 @@
         <aside class="master-pane">
           <div class="pane-title-row">
             <div>
-              <h2>Saved Plots</h2>
+              <h2>Family Plots</h2>
+              <div class="family-context" data-family-context>Family</div>
               <div id="savedCount" class="muted">Loading…</div>
             </div>
             <button id="fitAllSaved" class="secondary compact">Fit all</button>
           </div>
 
           <div class="filters">
-            <input id="savedSearch" placeholder="Search plot / owner / notes"/>
+            <input id="savedSearch" placeholder="Search plot / khata / owner / raiyat"/>
+            <div class="survey-filter-block">
+              <span class="filter-label">Survey</span>
+              <div id="savedSurveyFilter" class="survey-segment" role="radiogroup" aria-label="Saved plot survey"></div>
+            </div>
             <div class="filter-grid">
               <select id="savedSheetFilter">
                 <option value="">All sheets</option>
@@ -62,11 +67,20 @@
               <select id="savedOwnerFilter">
                 <option value="">All owners</option>
               </select>
+              <select id="savedSort" aria-label="Sort family plots">
+                <option value="plot-asc">Plot No. ↑</option>
+                <option value="plot-desc">Plot No. ↓</option>
+                <option value="area-desc">Area ↓</option>
+                <option value="area-asc">Area ↑</option>
+                <option value="owner-asc">Owner A–Z</option>
+              </select>
             </div>
-            <label class="check saved-box-toggle">
-              <input id="showAllBBoxes" type="checkbox"/>
-              Show all plot boxes
-            </label>
+            <div class="saved-display-controls" aria-label="Map display">
+              <span class="filter-label">Map display</span>
+              <label class="check"><input id="showParcelShapes" type="checkbox" checked/> Parcel Shape</label>
+              <label class="check"><input id="showAllBBoxes" type="checkbox" checked/> BBox</label>
+              <label class="check"><input id="showSavedPins" type="checkbox" checked/> Pins</label>
+            </div>
           </div>
 
           <div id="savedList" class="saved-list"></div>
@@ -74,7 +88,7 @@
 
         <section class="detail-map-pane">
           <div id="savedMap" class="map"></div>
-          <div class="map-caption">Satellite + labels • Saved pins • Selected plot BBox in red</div>
+          <div class="map-caption">Satellite + labels • Saved pins • Irregular parcel shape when available • BBox fallback</div>
 
           <div id="selectedSummary" class="selected-summary hidden">
             <div>
@@ -96,10 +110,11 @@
       </div>
 
       <div id="mobileBoxesPanel" class="mobile-boxes-panel mobile-only hidden">
-        <label class="boxes-show-row">
-          <input id="mobileShowBoxes" type="checkbox" checked/>
-          <span>Show Boxes</span>
-        </label>
+        <div class="mobile-display-toggles">
+          <label class="boxes-show-row"><input id="mobileShowShapes" type="checkbox" checked/><span>Parcel Shape</span></label>
+          <label class="boxes-show-row"><input id="mobileShowBoxes" type="checkbox" checked/><span>Bounding Box</span></label>
+          <label class="boxes-show-row"><input id="mobileShowPins" type="checkbox" checked/><span>Pins</span></label>
+        </div>
         <div class="boxes-opacity-head">
           <span>Fill opacity</span>
           <b id="mobileBBoxOpacityValue">10%</b>
@@ -124,13 +139,19 @@
         <div class="drawer-handle"></div>
         <div class="drawer-head">
           <div>
-            <h2>Saved Plots</h2>
+            <h2>Family Plots</h2>
+            <div class="family-context" data-family-context>Family</div>
             <div id="mobileDrawerCount" class="muted"></div>
           </div>
           <button id="mobileDrawerClose" class="icon-btn" aria-label="Close plot drawer">×</button>
         </div>
 
-        <input id="mobileSavedSearch" placeholder="Search plot / owner / notes"/>
+        <input id="mobileSavedSearch" placeholder="Search plot / khata / owner / raiyat"/>
+
+        <div class="survey-filter-block mobile-survey-filter">
+          <span class="filter-label">Survey</span>
+          <div id="mobileSurveyFilter" class="survey-segment" role="radiogroup" aria-label="Saved plot survey"></div>
+        </div>
 
         <div class="drawer-filter-grid">
           <select id="mobileSheetFilter">
@@ -140,6 +161,13 @@
           </select>
           <select id="mobileOwnerFilter">
             <option value="">All owners</option>
+          </select>
+          <select id="mobileSavedSort" aria-label="Sort family plots">
+            <option value="plot-asc">Plot No. ↑</option>
+            <option value="plot-desc">Plot No. ↓</option>
+            <option value="area-desc">Area ↓</option>
+            <option value="area-asc">Area ↑</option>
+            <option value="owner-asc">Owner A–Z</option>
           </select>
         </div>
 
@@ -155,68 +183,186 @@
       </aside>
     </section>
 
-    <!-- ADD PLOT: existing cadastral workflow moved here -->
+    <!-- ADD PLOT: map-first dynamic CS/RS workflow -->
     <section id="view-add" class="view">
-      <div class="add-layout">
-        <aside class="add-pane">
-          <h2>Add Plot</h2>
-          <p class="muted add-intro">Use BhuNaksha to identify a cadastral parcel, verify it against Google Satellite, then save it.</p>
-
-          <label>CS Map Sheet</label>
-          <select id="sheetSelect">
-            <option value="01">Sheet 01</option>
-            <option value="02">Sheet 02</option>
-          </select>
-
-          <label class="check">
-            <input id="showNaksha" type="checkbox" checked/>
-            Show BhuNaksha sheet
-          </label>
-
-          <label>BhuNaksha opacity <span id="opacityValue">90%</span></label>
-          <input id="opacity" type="range" min="0" max="100" value="90"/>
-
-          <div class="button-grid">
-            <button id="fitSheet" class="secondary">Fit sheet</button>
-            <button id="reloadSheet" class="secondary">Refresh PNG</button>
+      <div class="add-workspace">
+        <section class="add-map-pane">
+          <div class="add-map-toolbar desktop-add-controls">
+            <div class="add-toolbar-title">
+              <b>Add Family Plot</b>
+              <span class="family-context" data-family-context>Family</span>
+              <span id="mapLifecycleHint" class="muted">Loading survey map…</span>
+            </div>
+            <div class="add-toolbar-controls">
+              <label>Mauza<select id="mauzaSelect"><option value="">Loading…</option></select></label>
+              <label>Survey<select id="surveySelect" disabled><option value="">Loading…</option></select></label>
+              <label>Map<select id="mapInstanceSelect" disabled><option value="">Loading…</option></select></label>
+              <label>Sheet<select id="sheetSelect" disabled><option value="">Loading…</option></select></label>
+            </div>
+            <div class="add-toolbar-actions">
+              <button id="fitSheet" class="secondary compact">Fit sheet</button>
+              <button id="reloadSheet" class="secondary compact">Refresh</button>
+              <label class="compact-toggle"><input id="showNaksha" type="checkbox" checked/> Naksha</label>
+              <label class="opacity-inline">Opacity <span id="opacityValue">90%</span><input id="opacity" type="range" min="0" max="100" value="90"/></label>
+            </div>
           </div>
 
-          <a id="rawImageLink" class="text-link" href="/api/bhunaksha-sheet.png?sheet=01" target="_blank" rel="noopener">Open raw cadastral PNG</a>
+          <button id="mobileMapSettingsBtn" class="mobile-map-config mobile-only">Harpur(199) • Loading… <span>Change</span></button>
+          <div id="addMap" class="map"></div>
+          <a id="rawImageLink" class="raw-map-link" href="#" target="_blank" rel="noopener">Raw BhuNaksha</a>
 
-          <div class="section-divider"></div>
+          <div id="mapLoadingCard" class="map-loading-card">
+            <div class="map-loading-spinner"></div>
+            <b>Loading survey map</b>
+            <span>Resolving Mauza → Survey → Map → Sheet</span>
+          </div>
 
-          <h3>Selected Plot</h3>
-          <div id="addStatus" class="status-box">Open Add Plot, zoom the cadastral map, and click inside a parcel.</div>
+          <div id="plotSelectionCard" class="plot-selection-card hidden">
+            <button id="closePlotSelection" class="selection-card-close" aria-label="Close selected plot">×</button>
+            <div>
+              <div class="selection-eyebrow">Selected plot</div>
+              <div class="selection-title">Plot <span id="selectionPlotNo"></span></div>
+              <div id="selectionMeta" class="selection-meta"></div>
+              <div id="selectionPniu" class="selection-pniu mono"></div>
+              <div id="selectionMeasure" class="selection-measure"></div>
+            </div>
+            <div class="selection-actions">
+              <button id="clearPlotSelection" class="secondary">Choose another</button>
+              <button id="addThisPlot" class="primary">Add This Plot</button>
+            </div>
+          </div>
 
-          <div id="plotForm" class="hidden">
-            <div class="kv"><b>Plot</b><span id="plotNo"></span></div>
-            <div class="kv"><b>Sheet</b><span id="plotSheet"></span></div>
-            <div class="kv"><b>PNIU</b><span id="pniu"></span></div>
-            <div class="kv"><b>Plot ID</b><span id="plotId" class="mono"></span></div>
-            <div class="kv"><b>Native XY</b><span id="nativeXY" class="mono"></span></div>
-            <div class="kv"><b>Center</b><span id="centerLatLng" class="mono"></span></div>
+          <div id="saveSuccessCard" class="plot-selection-card success-card hidden">
+            <div>
+              <div class="selection-eyebrow">Saved</div>
+              <div class="selection-title">Plot <span id="savedPlotNo"></span> saved ✓</div>
+              <div class="selection-meta">Map position and survey context are preserved.</div>
+            </div>
+            <div class="selection-actions">
+              <button id="addAnotherPlot" class="primary">Add Another Plot</button>
+              <button id="viewSavedPlot" class="secondary">View Saved Plot</button>
+            </div>
+          </div>
 
-            <a id="googleMapLink" class="action-link hidden" target="_blank" rel="noopener">Open plot center in Google Maps</a>
+          <div id="addStatus" class="map-status-pill">Preparing survey map…</div>
+        </section>
 
-            <label>Owner / family</label>
-            <input id="owner" placeholder="Owner / family"/>
+        <aside id="plotDetailsPanel" class="plot-details-panel hidden" aria-label="Add plot details">
+          <div class="details-panel-head">
+            <div>
+              <div class="selection-eyebrow">Add plot details</div>
+              <h2>Plot <span id="plotNo"></span></h2>
+              <div id="plotPanelSubtitle" class="muted"></div>
+            <div id="plotPanelMode" class="panel-mode">New family plot</div>
+            </div>
+            <button id="closePlotDetails" class="icon-btn" aria-label="Close plot details">×</button>
+          </div>
 
-            <label>Local name</label>
-            <input id="localName" placeholder="Tari / Pari / road side / etc."/>
+          <div id="plotForm" class="plot-form">
+            <section class="identity-always-open">
+              <div class="identity-title">Plot identity</div>
+              <div class="form-section-grid two-col">
+                <label>Exact Raiyat Name<input id="exactRaiyatName" placeholder="Exact text from official record"/></label>
+                <label>Land Type<select id="landType"><option value="">Select…</option><option value="AGRICULTURE">Agriculture Land</option><option value="DIH">Dih / Village Land</option><option value="OTHER">Other</option></select></label>
+                <label>Plot / Khesra No.<input id="khesraNo"/></label>
+                <label>Mauza<input id="mauzaField" readonly/></label>
+              </div>
+            </section>
 
-            <label>Notes</label>
-            <textarea id="notes" rows="3"></textarea>
+            <details open>
+              <summary>Land record</summary>
+              <div class="form-section-grid two-col">
+                <label>Thana No.<input id="thanaNo"/></label>
+                <label>Jamabandi No.<input id="jamabandiNo"/></label>
+                <label>Part No.<input id="partNo"/></label>
+                <label>Page No.<input id="pageNo"/></label>
+                <label>Computerized Jamabandi No.<input id="computerizedJamabandiNo"/></label>
+                <label>Khata No.<input id="khataNo"/></label>
+              </div>
+            </details>
 
-            <button id="reconstruct" class="secondary full">Reconstruct polygon</button>
-            <button id="savePlot" class="primary full">Save / Update Plot</button>
-            <button id="deletePlot" class="danger full">Delete Plot</button>
+            <details>
+              <summary>Ownership</summary>
+              <div class="form-section-grid">
+                <label>Family<select id="familySelect"><option value="">Select family…</option></select></label>
+                <div class="segmented-field">
+                  <span class="field-label">Ownership Type</span>
+                  <div class="segmented-control">
+                    <button id="ownershipIndividual" type="button" data-value="Individual" class="active">Individual</button>
+                    <button id="ownershipJoint" type="button" data-value="Joint">Joint</button>
+                  </div>
+                  <input id="ownershipType" type="hidden" value="Individual"/>
+                </div>
+                <label id="individualOwnerWrap">Owner<select id="primaryOwnerSelect"><option value="">Select owner…</option></select></label>
+                <div id="jointOwnersWrap" class="hidden">
+                  <span class="field-label">Owners</span>
+                  <button id="openCoOwnerPicker" type="button" class="multi-owner-trigger secondary">Select owners</button>
+                  <div id="coOwnerChips" class="owner-chips"></div>
+                </div>
+              </div>
+            </details>
+
+            <details>
+              <summary>Area & local details</summary>
+              <div class="form-section-grid two-col">
+                <label>Official Area (Decimal)<input id="plotAreaDecimal" type="number" step="any" inputmode="decimal"/></label>
+                <label>Bigha <input id="plotAreaBigha" readonly placeholder="Calculated ÷ 62"/></label>
+                <label>Jamabandi Total Area (Decimal)<input id="jamabandiTotalAreaDecimal" type="number" step="any" inputmode="decimal"/></label>
+                <label>Local Location<select id="locationSelect"><option value="">Select location…</option></select></label>
+                <label class="span-2">Local Name<input id="localName" placeholder="Optional local description"/></label>
+                <label class="span-2">Notes<textarea id="notes" rows="3"></textarea></label>
+              </div>
+            </details>
+
+            <details>
+              <summary>Map / technical</summary>
+              <div class="technical-grid">
+                <div class="kv"><b>Survey</b><span id="plotSurvey"></span></div>
+                <div class="kv"><b>Map</b><span id="plotMapInstance"></span></div>
+                <div class="kv"><b>Sheet</b><span id="plotSheet"></span></div>
+                <div class="kv"><b>PNIU</b><span id="pniu"></span></div>
+                <div class="kv"><b>Plot ID</b><span id="plotId" class="mono"></span></div>
+                <div class="kv"><b>Native XY</b><span id="nativeXY" class="mono"></span></div>
+                <div class="kv"><b>Center</b><span id="centerLatLng" class="mono"></span></div>
+                <div class="kv"><b>Map Area</b><span id="mapCalcArea"></span></div>
+                <div class="kv"><b>Perimeter</b><span id="mapPerimeter"></span></div>
+                <div class="kv"><b>Longest Dimension</b><span id="mapLongest"></span></div>
+                <div class="kv"><b>Approx. Width</b><span id="mapApproxWidth"></span></div>
+                <a id="googleMapLink" class="action-link hidden" target="_blank" rel="noopener">Open plot center in Google Maps</a>
+                <button id="reconstruct" class="secondary full" type="button">Reconstruct polygon</button>
+              </div>
+            </details>
+
+            <div class="sticky-save-bar">
+              <button id="cancelPlotDetails" class="secondary">Cancel</button>
+              <button id="savePlot" class="primary">Save Plot</button>
+              <button id="deletePlot" class="danger hidden">Delete</button>
+            </div>
           </div>
         </aside>
+      </div>
 
-        <section class="add-map-pane">
-          <div id="addMap" class="map"></div>
-          <div class="map-caption">Satellite + labels + active BhuNaksha sheet</div>
-        </section>
+      <div id="mobileMapSettings" class="mobile-settings-sheet hidden">
+        <div class="mobile-sheet-backdrop"></div>
+        <div class="mobile-sheet-card">
+          <div class="mobile-sheet-head"><b>Map settings</b><button id="closeMobileMapSettings" class="icon-btn">×</button></div>
+          <label>Mauza<select id="mobileMauzaMirror" disabled></select></label>
+          <label>Survey<select id="mobileSurveyMirror" disabled></select></label>
+          <label>Map Instance<select id="mobileMapMirror" disabled></select></label>
+          <label>Sheet<select id="mobileSheetMirror" disabled></select></label>
+          <div class="button-grid"><button id="mobileFitSheet" class="secondary">Fit sheet</button><button id="mobileRefreshSheet" class="secondary">Refresh</button></div>
+          <button id="mobileSettingsDone" class="primary full">Done</button>
+        </div>
+      </div>
+
+      <div id="coOwnerPicker" class="mobile-settings-sheet hidden">
+        <div class="mobile-sheet-backdrop"></div>
+        <div class="mobile-sheet-card owner-picker-card">
+          <div class="mobile-sheet-head"><b>Select owners</b><button id="closeCoOwnerPicker" class="icon-btn">×</button></div>
+          <input id="coOwnerSearch" placeholder="Search family member"/>
+          <div id="coOwnerList" class="co-owner-list"></div>
+          <button id="coOwnerDone" class="primary full">Done</button>
+        </div>
       </div>
     </section>
 
@@ -225,7 +371,7 @@
       <div class="about-wrap">
         <div class="about-card">
           <h1>Harpur Land Mapper</h1>
-          <div class="version-badge">Version 6.5</div>
+          <div class="version-badge">Version 7.5</div>
           <p>
             Family land-mapping application for browsing saved plots on Google Satellite
             and adding/verifying parcels from Bihar BhuNaksha.
@@ -233,8 +379,8 @@
 
           <h3>Navigation</h3>
           <div class="about-grid">
-            <div><b>Saved Plots</b><span>Default master-detail database browser. No BhuNaksha dependency.</span></div>
-            <div><b>Add Plot</b><span>Cadastral data-entry workflow using Google Satellite + BhuNaksha.</span></div>
+            <div><b>Family Plots</b><span>Saved family land records on Google Maps, one survey context at a time.</span></div>
+            <div><b>Add Family Plot</b><span>Dynamic CS/RS survey-map workflow for adding or updating a family plot.</span></div>
             <div><b>About</b><span>Application information and version.</span></div>
           </div>
 
@@ -242,7 +388,7 @@
           <ul>
             <li>All database plots with valid center coordinates appear as pins.</li>
             <li>The selected plot BBox is drawn in red.</li>
-            <li>Optional <b>Show all plot boxes</b> displays all saved BBoxes.</li>
+            <li>Optional <b>Show plot shapes / boxes</b> displays all saved BBoxes.</li>
             <li>Select a plot from the master list to navigate directly to its pin.</li>
             <li>Tap a pin to see plot number, owner, sheet, Directions and Details.</li>
             <li>Directions opens Google Maps with the saved plot as destination; Google Maps can use the user's current location.</li>
@@ -271,45 +417,113 @@
 
 <!-- Saved plot details -->
 <div id="detailsModal" class="modal hidden">
-  <div class="modal-card details-card">
-    <div class="modal-head">
+  <div class="modal-card details-card saved-detail-editor">
+    <div class="modal-head saved-detail-head">
       <div>
+        <div class="selection-eyebrow">Family plot details</div>
         <h2 id="detailTitle">Plot</h2>
         <div id="detailSubtitle" class="muted"></div>
       </div>
       <button id="closeDetails" class="icon-btn" aria-label="Close details">×</button>
     </div>
 
-    <div class="details-columns">
-      <section>
-        <h3>General</h3>
-        <label>Owner / family</label>
-        <input id="detailOwner"/>
-        <label>Local name</label>
-        <input id="detailLocalName"/>
-        <label>Notes</label>
-        <textarea id="detailNotes" rows="5"></textarea>
+    <div id="detailForm" class="plot-form saved-detail-form">
+      <section class="identity-always-open">
+        <div class="identity-title">Plot identity</div>
+        <div class="form-section-grid two-col">
+          <label>Exact Raiyat Name<input id="detailExactRaiyatName" placeholder="Exact text from official record"/></label>
+          <label>Land Type<select id="detailLandType"><option value="">Select…</option><option value="AGRICULTURE">Agriculture Land</option><option value="DIH">Dih / Village Land</option><option value="OTHER">Other</option></select></label>
+          <label>Plot / Khesra No.<input id="detailKhesraNo"/></label>
+          <label>Mauza<input id="detailMauza" readonly/></label>
+        </div>
+      </section>
 
+      <details open>
+        <summary>Land record</summary>
+        <div class="form-section-grid two-col">
+          <label>Thana No.<input id="detailThanaNo"/></label>
+          <label>Jamabandi No.<input id="detailJamabandiNo"/></label>
+          <label>Part No.<input id="detailPartNo"/></label>
+          <label>Page No.<input id="detailPageNo"/></label>
+          <label>Computerized Jamabandi No.<input id="detailComputerizedJamabandiNo"/></label>
+          <label>Khata No.<input id="detailKhataNo"/></label>
+        </div>
+      </details>
+
+      <details>
+        <summary>Ownership</summary>
+        <div class="form-section-grid">
+          <label>Family<select id="detailFamilySelect"><option value="">Select family…</option></select></label>
+          <div class="segmented-field">
+            <span class="field-label">Ownership Type</span>
+            <div class="segmented-control">
+              <button id="detailOwnershipIndividual" type="button" data-value="Individual" class="active">Individual</button>
+              <button id="detailOwnershipJoint" type="button" data-value="Joint">Joint</button>
+            </div>
+            <input id="detailOwnershipType" type="hidden" value="Individual"/>
+          </div>
+          <label id="detailIndividualOwnerWrap">Owner<select id="detailPrimaryOwnerSelect"><option value="">Select owner…</option></select></label>
+          <div id="detailJointOwnersWrap" class="hidden">
+            <span class="field-label">Owners</span>
+            <button id="openDetailCoOwnerPicker" type="button" class="multi-owner-trigger secondary">Select owners</button>
+            <div id="detailCoOwnerChips" class="owner-chips"></div>
+          </div>
+        </div>
+      </details>
+
+      <details>
+        <summary>Area & local details</summary>
+        <div class="form-section-grid two-col">
+          <label>Official Area (Decimal)<input id="detailPlotAreaDecimal" type="number" step="any" inputmode="decimal"/></label>
+          <label>Bigha<input id="detailPlotAreaBigha" readonly placeholder="Calculated ÷ 62"/></label>
+          <label>Jamabandi Total Area (Decimal)<input id="detailJamabandiTotalAreaDecimal" type="number" step="any" inputmode="decimal"/></label>
+          <label>Local Location<select id="detailLocationSelect"><option value="">Select location…</option></select></label>
+          <label class="span-2">Local Name<input id="detailLocalName" placeholder="Optional local description"/></label>
+          <label class="span-2">Notes<textarea id="detailNotes" rows="3"></textarea></label>
+        </div>
+      </details>
+
+      <details>
+        <summary>Map / technical</summary>
+        <div class="technical-grid saved-technical-grid">
+          <div class="kv"><b>Survey</b><span id="detailSurvey"></span></div>
+          <div class="kv"><b>Map</b><span id="detailMapInstance"></span></div>
+          <div class="kv"><b>Sheet</b><span id="detailSheet"></span></div>
+          <div class="kv"><b>PNIU</b><span id="detailPniu" class="mono"></span></div>
+          <div class="kv"><b>Plot ID</b><span id="detailPlotId" class="mono"></span></div>
+          <div class="kv"><b>GIS Code</b><span id="detailGisCode" class="mono"></span></div>
+          <div class="kv"><b>Center</b><span id="detailCenter" class="mono"></span></div>
+          <div class="kv"><b>Native XY</b><span id="detailXY" class="mono"></span></div>
+          <div class="kv"><b>BBox</b><span id="detailBBox" class="mono"></span></div>
+          <div class="kv"><b>Geometry</b><span id="detailGeometry"></span></div>
+          <div class="kv"><b>Map Area</b><span id="detailMapArea"></span></div>
+          <div class="kv"><b>Perimeter</b><span id="detailPerimeter"></span></div>
+          <div class="kv"><b>Longest Dimension</b><span id="detailLongest"></span></div>
+          <div class="kv"><b>Approx. Width</b><span id="detailApproxWidth"></span></div>
+        </div>
+      </details>
+
+      <div class="detail-footer-actions">
         <div class="button-grid detail-actions">
           <button id="detailDirections" class="primary">Directions</button>
           <button id="detailGoogle" class="secondary">Open Google Maps</button>
         </div>
-        <button id="detailSave" class="primary full">Save / Update</button>
-        <button id="detailDelete" class="danger full">Delete Plot</button>
-      </section>
-
-      <section class="technical-card">
-        <h3>Technical</h3>
-        <div class="kv"><b>Survey</b><span id="detailSurvey"></span></div>
-        <div class="kv"><b>Sheet</b><span id="detailSheet"></span></div>
-        <div class="kv"><b>PNIU</b><span id="detailPniu" class="mono"></span></div>
-        <div class="kv"><b>Plot ID</b><span id="detailPlotId" class="mono"></span></div>
-        <div class="kv"><b>GIS Code</b><span id="detailGisCode" class="mono"></span></div>
-        <div class="kv"><b>Center</b><span id="detailCenter" class="mono"></span></div>
-        <div class="kv"><b>Native XY</b><span id="detailXY" class="mono"></span></div>
-        <div class="kv"><b>BBox</b><span id="detailBBox" class="mono"></span></div>
-      </section>
+        <div class="button-grid detail-save-actions">
+          <button id="detailSave" class="primary">Save / Update</button>
+          <button id="detailDelete" class="danger">Delete Plot</button>
+        </div>
+      </div>
     </div>
+  </div>
+</div>
+
+<div id="detailCoOwnerPicker" class="mobile-settings-sheet hidden">
+  <div class="mobile-sheet-backdrop"></div>
+  <div class="mobile-sheet-card owner-picker-card">
+    <div class="mobile-sheet-head"><b>Select owners</b><button id="closeDetailCoOwnerPicker" class="icon-btn">×</button></div>
+    <input id="detailCoOwnerSearch" placeholder="Search family member"/>
+    <div id="detailCoOwnerList" class="co-owner-list"></div>
+    <button id="detailCoOwnerDone" class="primary full">Done</button>
   </div>
 </div>
 

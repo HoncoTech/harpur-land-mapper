@@ -397,3 +397,221 @@ label{display:block;font-size:13px;font-weight:650;margin-top:10px}
     height:100%;
   }
 }
+
+/* V7.0 - dynamic CS/RS Add Plot lifecycle */
+.add-mode-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+  margin:8px 0 4px;
+}
+.compact-status{
+  margin:10px 0 12px;
+  padding:9px 10px;
+  font-size:12px;
+}
+.add-pane select:disabled{
+  opacity:.65;
+  cursor:not-allowed;
+}
+#editExistingPanel{margin-top:10px}
+@media(max-width:900px){
+  .add-mode-grid{grid-template-columns:1fr}
+}
+
+/* V7.1 - map-first Add Plot workspace */
+#view-add.active{height:calc(100vh - 64px);overflow:hidden;background:#e8eaed}
+.add-workspace{position:relative;width:100%;height:100%}
+#view-add .add-map-pane{position:absolute;inset:0;height:100%}
+#view-add #addMap{height:100%;width:100%}
+.add-map-toolbar{
+  position:absolute;z-index:12;top:12px;left:12px;right:12px;
+  background:rgba(255,255,255,.97);border:1px solid rgba(210,214,220,.95);border-radius:14px;
+  box-shadow:0 5px 22px rgba(0,0,0,.18);padding:10px 12px;display:grid;
+  grid-template-columns:minmax(170px,.8fr) minmax(500px,2.3fr) auto;gap:12px;align-items:end;
+  backdrop-filter:blur(8px)
+}
+.add-toolbar-title{align-self:center;min-width:0}
+.add-toolbar-title b{display:block;font-size:17px}
+.add-toolbar-title span{display:block;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.add-toolbar-controls{display:grid;grid-template-columns:1.35fr 1.1fr 1.2fr .65fr;gap:8px;min-width:0}
+.add-toolbar-controls label{margin:0;font-size:11px;color:#5f6368;font-weight:700}
+.add-toolbar-controls select{margin-top:3px;padding:7px 8px;min-height:36px;font-size:13px;background:#fff}
+.add-toolbar-actions{display:flex;align-items:center;gap:7px;white-space:nowrap}
+.compact-toggle{display:flex;align-items:center;gap:5px;margin:0;padding:0 3px;font-size:12px;font-weight:650}
+.compact-toggle input{width:auto}
+.opacity-inline{margin:0;font-size:11px;color:#5f6368;display:grid;grid-template-columns:auto auto;gap:0 5px;align-items:center}
+.opacity-inline input{grid-column:1/3;width:110px;padding:0;border:0;min-height:18px}
+.raw-map-link{position:absolute;right:12px;bottom:12px;z-index:5;background:rgba(255,255,255,.92);border:1px solid var(--border);border-radius:8px;padding:6px 9px;font-size:11px;text-decoration:none;color:#394150;box-shadow:var(--shadow)}
+.map-status-pill{position:absolute;z-index:9;left:50%;bottom:14px;transform:translateX(-50%);max-width:min(600px,70vw);background:rgba(32,33,36,.84);color:#fff;border-radius:999px;padding:7px 12px;font-size:12px;box-shadow:var(--shadow);pointer-events:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.map-loading-card{position:absolute;z-index:11;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:5px;background:rgba(255,255,255,.96);border:1px solid var(--border);border-radius:14px;padding:18px 24px;box-shadow:0 8px 30px rgba(0,0,0,.2);text-align:center}
+.map-loading-card span{font-size:12px;color:var(--muted)}
+.map-loading-spinner{width:28px;height:28px;border:3px solid #dbe4f3;border-top-color:#1a73e8;border-radius:50%;animation:mapspin .8s linear infinite;margin-bottom:3px}
+@keyframes mapspin{to{transform:rotate(360deg)}}
+.plot-selection-card{position:absolute;z-index:13;left:50%;bottom:48px;transform:translateX(-50%);width:min(670px,calc(100vw - 40px));background:rgba(255,255,255,.98);border:1px solid var(--border);border-radius:14px;padding:13px 15px;box-shadow:0 7px 28px rgba(0,0,0,.22);display:flex;justify-content:space-between;align-items:center;gap:18px}
+.selection-eyebrow{text-transform:uppercase;letter-spacing:.055em;font-size:10px;color:var(--muted);font-weight:800}
+.selection-title{font-size:20px;font-weight:800;margin-top:1px}
+.selection-meta{font-size:12px;color:#4f5661;margin-top:2px}
+.selection-pniu{margin-top:3px;color:var(--muted)}
+.selection-actions{display:flex;gap:8px;flex:0 0 auto}
+.success-card{border-color:#b8d6c2}
+.plot-details-panel{position:absolute;z-index:15;top:0;right:0;bottom:0;width:min(430px,38vw);background:#fff;border-left:1px solid var(--border);box-shadow:-8px 0 30px rgba(0,0,0,.18);overflow:auto;padding:18px 18px 88px}
+.details-panel-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;position:sticky;top:-18px;background:#fff;z-index:3;padding:18px 0 10px;border-bottom:1px solid #eceef1}
+.details-panel-head h2{margin:2px 0 0;font-size:24px}
+.plot-form details{border-bottom:1px solid #eceef1;padding:4px 0}
+.plot-form summary{cursor:pointer;font-weight:800;padding:13px 0;list-style:none;display:flex;align-items:center;justify-content:space-between}
+.plot-form summary::-webkit-details-marker{display:none}
+.plot-form summary::after{content:'›';font-size:20px;transform:rotate(90deg);transition:.15s;color:#6b7280}
+.plot-form details:not([open]) summary::after{transform:rotate(0)}
+.form-section-grid{display:grid;grid-template-columns:1fr;gap:9px;padding:0 0 14px}
+.form-section-grid.two-col{grid-template-columns:1fr 1fr}
+.form-section-grid label{margin:0;font-size:12px;color:#555d68}
+.form-section-grid input,.form-section-grid select,.form-section-grid textarea{margin-top:4px;color:var(--text)}
+.span-2{grid-column:1/-1}
+.field-label{display:block;font-size:12px;color:#555d68;font-weight:650;margin-bottom:5px}
+.segmented-control{display:grid;grid-template-columns:1fr 1fr;border:1px solid #bbc1c8;border-radius:9px;overflow:hidden;background:#f7f8fa}
+.segmented-control button{border:0;border-radius:0;background:transparent;padding:9px 10px;font-weight:700;color:#555d68}
+.segmented-control button.active{background:#1a73e8;color:#fff}
+.multi-owner-trigger{width:100%;text-align:left;display:flex;justify-content:space-between}
+.owner-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.owner-chip{display:inline-flex;align-items:center;gap:5px;border:1px solid #cfd5dd;background:#f6f8fa;border-radius:999px;padding:4px 8px;font-size:12px}
+.owner-chip button{border:0;background:transparent;padding:0;font-size:16px;line-height:1;color:#666}
+.technical-grid{padding-bottom:14px}
+.technical-grid .kv{grid-template-columns:80px 1fr}
+.sticky-save-bar{position:fixed;right:0;bottom:0;width:min(430px,38vw);padding:12px 18px;background:rgba(255,255,255,.97);border-top:1px solid var(--border);display:grid;grid-template-columns:1fr 1.4fr;gap:8px;z-index:16;box-shadow:0 -5px 16px rgba(0,0,0,.06)}
+.sticky-save-bar .danger{grid-column:1/-1}
+.mobile-settings-sheet{position:fixed;inset:0;z-index:110;display:flex;align-items:flex-end;justify-content:center}
+.mobile-sheet-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.42)}
+.mobile-sheet-card{position:relative;width:min(560px,100%);max-height:88vh;overflow:auto;background:#fff;border-radius:18px 18px 0 0;padding:16px 16px 24px;box-shadow:0 -10px 40px rgba(0,0,0,.28)}
+.mobile-sheet-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:18px}
+.owner-picker-card{max-height:78vh}
+.co-owner-list{display:grid;gap:7px;margin:12px 0;max-height:50vh;overflow:auto}
+.co-owner-row{display:flex;align-items:center;gap:10px;border:1px solid var(--border);border-radius:10px;padding:10px;margin:0;font-weight:500}
+.co-owner-row input{width:auto;min-height:0}
+.co-owner-row span{display:flex;flex-direction:column}
+.co-owner-row small{color:var(--muted);margin-top:1px}
+.empty-picker{padding:18px;text-align:center}
+.mobile-map-config{display:none}
+
+@media(max-width:1050px) and (min-width:901px){
+  .add-map-toolbar{grid-template-columns:150px 1fr;grid-template-areas:'title controls' 'actions actions'}
+  .add-toolbar-title{grid-area:title}.add-toolbar-controls{grid-area:controls}.add-toolbar-actions{grid-area:actions;justify-content:flex-end}
+  .plot-details-panel,.sticky-save-bar{width:420px;max-width:44vw}
+}
+
+@media(max-width:900px){
+  #view-add.active{position:fixed;inset:64px 0 0 0;height:auto;z-index:20;overflow:hidden;background:#fff}
+  #view-add .add-workspace,#view-add .add-map-pane,#view-add #addMap{height:100%;min-height:0}
+  .desktop-add-controls{display:none}
+  .mobile-map-config{display:flex;position:absolute;z-index:12;top:10px;left:10px;right:10px;width:calc(100% - 20px);border:1px solid var(--border);border-radius:11px;background:rgba(255,255,255,.96);box-shadow:var(--shadow);padding:10px 12px;justify-content:space-between;gap:10px;align-items:center;font-size:12px;font-weight:700;min-height:44px;text-align:left;overflow:hidden;white-space:nowrap}
+  .mobile-map-config span{margin-left:auto;color:#1a73e8;font-weight:800}
+  .raw-map-link{display:none}
+  .map-status-pill{bottom:12px;max-width:calc(100vw - 24px);font-size:11px}
+  .plot-selection-card{left:10px;right:10px;bottom:42px;transform:none;width:auto;display:block;padding:13px}
+  .selection-actions{display:grid;grid-template-columns:1fr 1.35fr;margin-top:11px}
+  .selection-actions button{min-height:44px}
+  .plot-details-panel{position:fixed;z-index:105;inset:86px 0 0 0;width:auto;max-width:none;border-left:0;border-radius:18px 18px 0 0;box-shadow:0 -8px 30px rgba(0,0,0,.22);padding:15px 14px 82px}
+  .details-panel-head{top:-15px;padding-top:15px}
+  .sticky-save-bar{left:0;right:0;bottom:0;width:auto;max-width:none;padding:10px 14px;grid-template-columns:1fr 1.45fr}
+  .form-section-grid.two-col{grid-template-columns:1fr}
+  .span-2{grid-column:auto}
+  .map-loading-card{width:min(300px,calc(100vw - 38px))}
+}
+
+
+/* V7.2 parcel-shape + focused Add Plot form */
+.selection-measure{
+  margin-top:7px;
+  font-size:12px;
+  font-weight:700;
+  color:#1f5f3b;
+}
+.identity-always-open{
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:12px;
+  background:#fff;
+}
+.identity-title{
+  font-size:14px;
+  font-weight:800;
+  margin-bottom:4px;
+}
+#plotForm details{
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:0 12px 12px;
+  background:#fff;
+}
+#plotForm details>summary{
+  cursor:pointer;
+  font-weight:800;
+  padding:12px 0;
+  user-select:none;
+}
+#plotForm details:not([open]){
+  padding-bottom:0;
+}
+
+/* V7.3 family-context + survey-scoped Saved Plots */
+.family-context{font-size:12px;color:#667085;font-weight:600;margin-top:2px}
+.add-toolbar-title .family-context{display:block;margin-top:2px}
+.survey-filter-block{display:flex;align-items:center;gap:10px;margin-top:10px}
+.filter-label{font-size:12px;font-weight:700;color:#475467;min-width:48px}
+.survey-segment{display:inline-flex;padding:3px;background:#eef2f6;border:1px solid #d0d5dd;border-radius:10px;gap:3px}
+.survey-segment-btn{border:0;background:transparent;padding:7px 16px;border-radius:7px;font-weight:800;cursor:pointer;color:#475467;min-width:54px}
+.survey-segment-btn.active{background:#fff;color:#1d4ed8;box-shadow:0 1px 3px rgba(16,24,40,.14)}
+#savedSort,#mobileSavedSort{min-width:0}
+.master-pane .filter-grid{grid-template-columns:1fr 1fr}
+.master-pane #savedSort{grid-column:1/-1}
+.panel-mode{display:inline-flex;margin-top:6px;padding:4px 8px;border-radius:999px;background:#eef4ff;color:#3157a4;font-size:12px;font-weight:800}
+.mobile-survey-filter{margin:10px 0 12px}
+#mobilePlotsDrawer .drawer-filter-grid{grid-template-columns:1fr 1fr}
+#mobileSavedSort{grid-column:1/-1}
+@media(max-width:900px){
+  .survey-filter-block{justify-content:space-between}
+  .survey-segment{flex:1}
+  .survey-segment-btn{flex:1}
+}
+
+/* V7.4 geometry/display refinements */
+.saved-display-controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:7px 2px 2px;font-size:13px}
+.saved-display-controls .filter-label{margin-right:2px}
+.saved-display-controls .check{display:inline-flex;align-items:center;gap:5px;margin:0}
+.mobile-display-toggles{display:grid;gap:8px}
+.plot-selection-card{position:absolute}
+.selection-card-close{position:absolute;top:8px;right:9px;width:32px;height:32px;border:0;background:transparent;border-radius:50%;font-size:24px;line-height:30px;cursor:pointer;color:#1f2937}
+.selection-card-close:hover{background:#eef2f7}
+.plot-selection-card>div:first-of-type{padding-right:30px}
+@media(max-width:760px){
+  .saved-display-controls{gap:8px}
+  .selection-card-close{top:6px;right:7px}
+}
+
+/* V7.5 Saved Plot editor aligned with Add Family Plot */
+.saved-detail-editor{width:min(980px,96vw);padding:0;overflow:hidden}
+.saved-detail-head{padding:18px 20px 12px;border-bottom:1px solid var(--border);background:#fff;position:sticky;top:0;z-index:4}
+.saved-detail-form{padding:16px 20px 20px;max-height:calc(92vh - 86px);overflow:auto;background:#f7f8fa}
+.saved-detail-form .identity-always-open{margin-bottom:10px}
+.saved-detail-form details{margin-top:10px}
+.saved-detail-form .technical-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px 18px}
+.saved-detail-form .technical-grid .kv{grid-template-columns:105px minmax(0,1fr)}
+.saved-detail-form .technical-grid .kv span{overflow-wrap:anywhere}
+.detail-footer-actions{position:sticky;bottom:-20px;margin:14px -20px -20px;padding:12px 20px 16px;background:rgba(255,255,255,.97);border-top:1px solid var(--border);box-shadow:0 -5px 14px rgba(0,0,0,.05);z-index:3}
+.detail-save-actions{margin-top:8px;grid-template-columns:1.4fr 1fr}
+
+@media(max-width:900px){
+  #detailsModal{padding:0;align-items:flex-end}
+  .saved-detail-editor{width:100%;max-height:94vh;border-radius:18px 18px 0 0}
+  .saved-detail-head{padding:15px 14px 10px}
+  .saved-detail-form{padding:12px 14px 18px;max-height:calc(94vh - 76px)}
+  .saved-detail-form .technical-grid{grid-template-columns:1fr}
+  .detail-footer-actions{bottom:-18px;margin:12px -14px -18px;padding:10px 14px 14px}
+  .detail-save-actions{grid-template-columns:1fr}
+}
+.saved-detail-form details{border:1px solid var(--border);border-radius:10px;padding:0 12px 12px;background:#fff}
+.saved-detail-form details>summary{cursor:pointer;font-weight:800;padding:12px 0;user-select:none;list-style:none;display:flex;align-items:center;justify-content:space-between}
+.saved-detail-form details>summary::-webkit-details-marker{display:none}
+.saved-detail-form details>summary::after{content:'›';font-size:20px;transform:rotate(90deg);transition:.15s;color:#6b7280}
+.saved-detail-form details:not([open]){padding-bottom:0}
+.saved-detail-form details:not([open])>summary::after{transform:rotate(0)}
