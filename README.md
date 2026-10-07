@@ -63,3 +63,12 @@ BhuNaksha overlays and reconstructed parcel geometry are for family reference an
 ## v7.7 reconstruction fallback fix
 
 Parcel-shape reconstruction is now non-fatal. If BhuNaksha parcel tracing cannot produce a valid irregular polygon, `/api/reconstruct` returns an `INVALID` geometry warning instead of a 502 error. Add/Update continues using the parcel BBox fallback. A previously valid saved polygon is preserved when a new reconstruction attempt fails. The manual Reconstruct action reports the warning in the page status instead of blocking the workflow with an alert.
+
+
+## v7.8 robust parcel contour fix
+
+- Replaced the fragile greedy boundary-pixel walker with a pixel-cell outer-contour tracer.
+- Tries both the raw parcel mask and a one-pixel eroded alternative, validates both, and keeps the better candidate.
+- Preserves the v7.7 non-blocking BBox fallback if neither contour is valid.
+- Geometry version is now 4 for newly reconstructed shapes.
+- This specifically targets repeatable failures such as RS Plot 525 returning `Could not trace selected plot boundary`.

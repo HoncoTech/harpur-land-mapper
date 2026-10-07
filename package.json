@@ -1,6 +1,6 @@
 {
-  "name": "harpur-land-mapper-v7.7-reconstruct-fallback",
-  "version": "7.7.0",
+  "name": "harpur-land-mapper-v7.8-robust-contour",
+  "version": "7.8.0",
   "private": true,
   "description": "Map-first Harpur Land Mapper with CS/RS, reconstructed parcel shapes and map measurements.",
   "main": "server.js",

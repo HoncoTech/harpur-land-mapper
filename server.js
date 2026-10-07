@@ -617,32 +617,84 @@ function largestConnectedComponent(mask,w,h){
   for(const idx of best)out[idx]=1;
   return {mask:out,size:best.length};
 }
-function boundaryMask(component,w,h){
-  const out=new Uint8Array(w*h);
-  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
-    const i=y*w+x;if(!component[i])continue;
-    if(isBoundary(component,w,h,x,y))out[i]=1;
+function polygonAreaPixels(points){
+  if(!Array.isArray(points)||points.length<3)return 0;
+  let a=0;
+  for(let i=0;i<points.length;i++){
+    const p=points[i],q=points[(i+1)%points.length];
+    a+=p[0]*q[1]-q[0]*p[1];
   }
-  return out;
+  return Math.abs(a)/2;
 }
-function traceBoundary(mask,w,h){
-  const b=boundaryMask(mask,w,h);
-  let sx=-1,sy=-1;
-  outer: for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(b[y*w+x]){sx=x;sy=y;break outer;}
-  if(sx<0)return[];
-  const dirs=[[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]];
-  let x=sx,y=sy,prev=4;const pts=[];
-  for(let step=0;step<w*h*2;step++){
-    pts.push([x,y]);let found=false;
-    const start=(prev+5)%8;
-    for(let i=0;i<8;i++){
-      const d=(start+i)%8,nx=x+dirs[d][0],ny=y+dirs[d][1];
-      if(nx>=0&&ny>=0&&nx<w&&ny<h&&b[ny*w+nx]){x=nx;y=ny;prev=d;found=true;break;}
-    }
-    if(!found)break;
-    if(x===sx&&y===sy&&pts.length>12)break;
+
+// Trace the exact outside edge of a binary parcel mask by walking pixel-cell
+// boundary edges. This is more robust than the previous greedy 8-neighbour
+// boundary-pixel walk, which could terminate early on thick strokes, corners,
+// narrow necks, or anti-aliased raster artifacts.
+function traceOuterContour(mask,w,h){
+  const edges=[];
+  const fg=(x,y)=>x>=0&&y>=0&&x<w&&y<h&&!!mask[y*w+x];
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+    if(!fg(x,y))continue;
+    // Directed clockwise around each foreground pixel (screen coordinates).
+    if(!fg(x,y-1))edges.push([[x,y],[x+1,y]]);
+    if(!fg(x+1,y))edges.push([[x+1,y],[x+1,y+1]]);
+    if(!fg(x,y+1))edges.push([[x+1,y+1],[x,y+1]]);
+    if(!fg(x-1,y))edges.push([[x,y+1],[x,y]]);
   }
-  return pts;
+  if(!edges.length)return[];
+
+  const key=p=>`${p[0]},${p[1]}`;
+  const outgoing=new Map();
+  for(let i=0;i<edges.length;i++){
+    const k=key(edges[i][0]);
+    if(!outgoing.has(k))outgoing.set(k,[]);
+    outgoing.get(k).push(i);
+  }
+  const used=new Uint8Array(edges.length),loops=[];
+
+  // Prefer the continuation that turns least sharply. This only matters at a
+  // rare vertex where raster components touch at a corner.
+  function chooseNext(candidates,prevVec){
+    if(candidates.length===1)return candidates[0];
+    let best=candidates[0],bestScore=-Infinity;
+    const plen=Math.hypot(prevVec[0],prevVec[1])||1;
+    for(const idx of candidates){
+      const e=edges[idx],v=[e[1][0]-e[0][0],e[1][1]-e[0][1]];
+      const vlen=Math.hypot(v[0],v[1])||1;
+      const dot=(prevVec[0]*v[0]+prevVec[1]*v[1])/(plen*vlen);
+      // Prefer straight, then right-turn over left-turn for clockwise outer edge.
+      const cross=prevVec[0]*v[1]-prevVec[1]*v[0];
+      const score=dot + (cross>0?0.01:0);
+      if(score>bestScore){bestScore=score;best=idx;}
+    }
+    return best;
+  }
+
+  for(let seed=0;seed<edges.length;seed++){
+    if(used[seed])continue;
+    const loop=[];
+    let idx=seed;
+    const firstStart=edges[idx][0],startKey=key(firstStart);
+    let prevVec=[edges[idx][1][0]-edges[idx][0][0],edges[idx][1][1]-edges[idx][0][1]];
+    for(let guard=0;guard<edges.length+8;guard++){
+      if(used[idx])break;
+      used[idx]=1;
+      const e=edges[idx];
+      if(!loop.length)loop.push(e[0]);
+      loop.push(e[1]);
+      const endKey=key(e[1]);
+      if(endKey===startKey && loop.length>4)break;
+      const cand=(outgoing.get(endKey)||[]).filter(i=>!used[i]);
+      if(!cand.length)break;
+      idx=chooseNext(cand,prevVec);
+      prevVec=[edges[idx][1][0]-edges[idx][0][0],edges[idx][1][1]-edges[idx][0][1]];
+    }
+    if(loop.length>=5 && key(loop[0])===key(loop[loop.length-1]))loops.push(loop);
+  }
+  if(!loops.length)return[];
+  loops.sort((a,b)=>polygonAreaPixels(b)-polygonAreaPixels(a));
+  return loops[0];
 }
 function pointLineDistance(p,a,b){
   const [x,y]=p,[x1,y1]=a,[x2,y2]=b,dx=x2-x1,dy=y2-y1;
@@ -749,24 +801,59 @@ async function reconstructPolygon({plotId,bbox,cfg,plotBBox=bbox}){
   const w=info.width,h=info.height,ch=info.channels,rawMask=new Uint8Array(w*h);
   // A higher alpha threshold rejects anti-aliased fringe pixels from the rendered selection stroke.
   for(let i=0;i<w*h;i++)rawMask[i]=data[i*ch+3]>=96?1:0;
-  let component=largestConnectedComponent(rawMask,w,h);
-  if(component.size<100)throw new Error('Could not isolate selected parcel in BhuNaksha selection image');
-  // One-pixel erosion traces closer to the parcel fill instead of the outside edge of the WMS highlight stroke.
-  const eroded=erodeMask(component.mask,w,h,1);
+  const rawComponent=largestConnectedComponent(rawMask,w,h);
+  if(rawComponent.size<100)throw new Error('Could not isolate selected parcel in BhuNaksha selection image');
+
+  function buildCandidate(component,label){
+    if(!component||component.size<100)return null;
+    let traced=traceOuterContour(component.mask,w,h);
+    if(traced.length<16)return null;
+    // traceOuterContour is closed. RDP expects an open chain, so simplify the
+    // ring without its duplicated closing point and close it again afterward.
+    if(traced.length>1&&traced[0][0]===traced[traced.length-1][0]&&traced[0][1]===traced[traced.length-1][1])traced=traced.slice(0,-1);
+    let simp=rdp(traced,0.55);
+    if(simp.length<8)simp=rdp(traced,0.30);
+    if(simp.length<6){
+      const step=Math.max(1,Math.floor(traced.length/180));
+      simp=traced.filter((_,i)=>i%step===0);
+    }
+    if(simp.length<4)return null;
+    if(simp[0][0]!==simp[simp.length-1][0]||simp[0][1]!==simp[simp.length-1][1])simp.push(simp[0]);
+    const nativeCoords=simp.map(([px,py])=>pixelToNative(px,py,bbox,w,h));
+    const measurements=polygonMeasurementsNative(nativeCoords,plotBBox);
+    let validation;
+    try{validation=validateReconstructedGeometry(nativeCoords,plotBBox,measurements);}catch(_){return null;}
+    // The OP=4 BBox is the parcel envelope. A good contour should span close
+    // to it in both dimensions. Lower score is better.
+    const score=Math.abs(Math.log(Math.max(0.001,validation.width_ratio)))+Math.abs(Math.log(Math.max(0.001,validation.height_ratio)));
+    return {label,nativeCoords,measurements,validation,score,componentPixels:component.size,tracePoints:traced.length};
+  }
+
+  const candidates=[];
+  const rawCandidate=buildCandidate(rawComponent,'raw');
+  if(rawCandidate)candidates.push(rawCandidate);
+
+  // Erosion is useful when the WMS selection stroke makes the parcel slightly
+  // fat, but it can damage thin/narrow parcels. Treat it as an alternative
+  // candidate instead of always replacing the raw mask.
+  const eroded=erodeMask(rawComponent.mask,w,h,1);
   const erodedComponent=largestConnectedComponent(eroded,w,h);
-  if(erodedComponent.size>=Math.max(100,component.size*0.70))component=erodedComponent;
-  const traced=traceBoundary(component.mask,w,h);
-  if(traced.length<16)throw new Error('Could not trace selected plot boundary');
-  // Preserve visible cadastral bends/notches. Stored geometry gets only light raster-noise simplification.
-  let simp=rdp(traced,0.65);
-  if(simp.length<8)simp=rdp(traced,0.35);
-  if(simp.length<6)simp=traced.filter((_,i)=>i%Math.max(1,Math.floor(traced.length/120))===0);
-  if(simp[0][0]!==simp[simp.length-1][0]||simp[0][1]!==simp[simp.length-1][1])simp.push(simp[0]);
-  const nativeCoords=simp.map(([px,py])=>pixelToNative(px,py,bbox,w,h));
-  const measurements=polygonMeasurementsNative(nativeCoords,plotBBox);
-  const validation=validateReconstructedGeometry(nativeCoords,plotBBox,measurements);
-  const coords=nativeCoords.map(([x,y])=>proj4('EPSG:32645','EPSG:4326',[x,y]));
-  return{geometry:{type:'Polygon',coordinates:[coords]},measurements,validation,componentPixels:component.size,raster:{width:w,height:h}};
+  if(erodedComponent.size>=Math.max(100,rawComponent.size*0.55)){
+    const erodedCandidate=buildCandidate(erodedComponent,'eroded-1px');
+    if(erodedCandidate)candidates.push(erodedCandidate);
+  }
+
+  if(!candidates.length)throw new Error('Could not trace selected plot boundary');
+  candidates.sort((a,b)=>a.score-b.score);
+  const best=candidates[0];
+  const coords=best.nativeCoords.map(([x,y])=>proj4('EPSG:32645','EPSG:4326',[x,y]));
+  return{
+    geometry:{type:'Polygon',coordinates:[coords]},
+    measurements:best.measurements,
+    validation:{...best.validation,maskVariant:best.label,tracePoints:best.tracePoints,candidateCount:candidates.length},
+    componentPixels:best.componentPixels,
+    raster:{width:w,height:h}
+  };
 }
 app.post('/api/reconstruct',async(req,res)=>{
   try{
@@ -788,7 +875,7 @@ app.post('/api/reconstruct',async(req,res)=>{
         survey:cfg.survey,sheet:cfg.sheet,gisCode:cfg.gisCode,plotId:p.plot_id,pniu:p.pniu||'',
         source:'Reconstructed from BhuNaksha WMS PLOT_LIST raster',
         measurements:reconstructed.measurements,
-        validation:{...reconstructed.validation,raster:reconstructed.raster}, geometryVersion:3, geometryStatus:'VALID'
+        validation:{...reconstructed.validation,raster:reconstructed.raster}, geometryVersion:4, geometryStatus:'VALID'
       },
       geometry:reconstructed.geometry
     });
@@ -809,7 +896,7 @@ app.post('/api/reconstruct',async(req,res)=>{
         source:'',
         measurements:null,
         validation:null,
-        geometryVersion:3,
+        geometryVersion:4,
         geometryStatus:'INVALID',
         warning:err.message||'Parcel shape reconstruction failed'
       },
@@ -1010,4 +1097,4 @@ app.delete('/api/plots/:survey/:sheet/:plotNo', (req,res) => {
   }
 });
 
-app.listen(PORT,()=>console.log(`Harpur Land Mapper V7.7 Reconstruct Fallback: http://localhost:${PORT}`));
+app.listen(PORT,()=>console.log(`Harpur Land Mapper V7.8 Robust Contour: http://localhost:${PORT}`));

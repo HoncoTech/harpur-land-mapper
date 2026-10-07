@@ -24,3 +24,7 @@ Runtime edits can still be lost when a free Render instance is replaced/redeploy
 For permanent multi-user editing, later move to:
 - paid persistent disk + SQLite, or
 - hosted PostgreSQL.
+
+
+### v7.8
+Parcel reconstruction now uses the robust outer-contour tracer. No deployment configuration changes are required.
