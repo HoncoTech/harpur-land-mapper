@@ -49,3 +49,12 @@ BhuNaksha overlays and reconstructed parcel geometry are for family reference an
 - Saved Plot details now mirrors Add Family Plot fields and ownership controls.
 - Plot Identity stays open; desktop allows two additional sections and mobile one.
 - Existing geometry/map technical data remains read-only in the technical section.
+
+
+## Version 7.6 review fixes
+- Existing plot matching now uses Survey + Plot No.
+- View Saved Plot preserves the active Add Plot survey and focuses the saved row/map parcel.
+- Add Plot selection card closes when clicking outside; Choose Another was removed.
+- Plot Identity stays open and only one additional Add Plot section may be open.
+- Desktop/mobile resize now re-evaluates the mobile Saved Plots toolbar.
+- Add Plot detail header spacing was reduced to improve vertical space.

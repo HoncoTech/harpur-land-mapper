@@ -164,12 +164,12 @@ label{display:block;font-size:13px;font-weight:650;margin-top:10px}
 .mobile-only{display:none}
 
 .mobile-saved-toolbar{
+  display:none;
   position:fixed;
   left:8px;
   right:8px;
   bottom:10px;
   z-index:70;
-  display:flex;
   gap:7px;
   padding:7px;
   border:1px solid var(--border);
@@ -615,3 +615,24 @@ label{display:block;font-size:13px;font-weight:650;margin-top:10px}
 .saved-detail-form details>summary::after{content:'›';font-size:20px;transform:rotate(90deg);transition:.15s;color:#6b7280}
 .saved-detail-form details:not([open]){padding-bottom:0}
 .saved-detail-form details:not([open])>summary::after{transform:rotate(0)}
+
+
+/* V7.6 review fixes: responsive saved toolbar + compact add editor */
+@media(min-width:901px){
+  .mobile-saved-toolbar{display:none !important}
+}
+.selection-actions-single{grid-template-columns:1fr !important}
+.plot-details-panel{padding-top:12px}
+.details-panel-head{top:-12px;padding:10px 0 7px;gap:8px}
+.details-panel-head .selection-eyebrow{font-size:10px;line-height:1.15}
+.details-panel-head h2{font-size:22px;line-height:1.05;margin:1px 0 0}
+#plotPanelSubtitle{font-size:12px;line-height:1.2;margin-top:2px}
+#plotPanelMode.panel-mode{margin-top:4px;padding:3px 7px;font-size:11px;line-height:1.2}
+#plotForm{padding-top:6px}
+#plotForm .identity-always-open{padding:10px;margin-bottom:8px}
+#plotForm details{margin-top:8px}
+#plotForm details>summary{padding:10px 0}
+@media(max-width:900px){
+  .details-panel-head{top:-12px;padding:10px 0 7px}
+  .details-panel-head h2{font-size:22px}
+}

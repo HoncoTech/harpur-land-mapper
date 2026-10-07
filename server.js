@@ -874,10 +874,10 @@ app.post('/api/plots',(req,res)=>{
       return res.status(400).json({error:'survey, sheet, gis_code and levels are required'});
     if(!record.plot_no)return res.status(400).json({error:'plot_no required'});
 
-    // GIS code identifies the actual village/survey/map/sheet context. Prefer it over
-    // the legacy (survey,sheet,plot_no) uniqueness when deciding what is the same parcel.
-    const exact=db.prepare('SELECT * FROM plots WHERE gis_code=? AND plot_no=?')
-      .get(record.gis_code,record.plot_no);
+    // For the current Harpur workflow, a saved parcel is identified by Survey + Plot No.
+    // Map/sheet/GIS metadata may be refreshed when the parcel is reselected on BhuNaksha.
+    const exact=db.prepare('SELECT * FROM plots WHERE survey=? AND plot_no=? ORDER BY id LIMIT 1')
+      .get(record.survey,record.plot_no);
 
     if(exact){
       db.prepare(`
@@ -943,15 +943,15 @@ app.post('/api/plots',(req,res)=>{
           @bbox_width_m,@bbox_height_m,@bbox_area_sqm,@measurement_source,@measurement_updated_at,CURRENT_TIMESTAMP
         )
       `).run(record);
-      const inserted=db.prepare('SELECT id FROM plots WHERE gis_code=? AND plot_no=?').get(record.gis_code,record.plot_no);
+      const inserted=db.prepare('SELECT id FROM plots WHERE survey=? AND plot_no=? ORDER BY id DESC LIMIT 1').get(record.survey,record.plot_no);
       if(inserted && record.ownership_type==='Joint'){
         const addCo=db.prepare('INSERT OR IGNORE INTO plot_coowners(plot_id,family_member_id) VALUES(?,?)');
         for(const memberId of coownerIds) addCo.run(inserted.id,memberId);
       }
     }
 
-    const r=db.prepare('SELECT * FROM plots WHERE gis_code=? AND plot_no=?')
-      .get(record.gis_code,record.plot_no);
+    const r=db.prepare('SELECT * FROM plots WHERE survey=? AND plot_no=? ORDER BY id LIMIT 1')
+      .get(record.survey,record.plot_no);
     const savedCoowners=db.prepare('SELECT family_member_id FROM plot_coowners WHERE plot_id=? ORDER BY id').all(r.id).map(x=>x.family_member_id);
     res.json({...r,geometry:r.geometry_geojson?JSON.parse(r.geometry_geojson):null,coowner_ids:savedCoowners});
   }catch(err){
@@ -965,16 +965,14 @@ app.delete('/api/plots/:survey/:sheet/:plotNo', (req,res) => {
   try {
     const { survey, sheet, plotNo } = req.params;
     const existing = db.prepare(
-      'SELECT * FROM plots WHERE survey=? AND sheet=? AND plot_no=?'
-    ).get(survey, sheet, plotNo);
+      'SELECT * FROM plots WHERE survey=? AND plot_no=? ORDER BY id LIMIT 1'
+    ).get(survey, plotNo);
 
     if (!existing) {
       return res.status(404).json({ error: 'Plot not found in local database' });
     }
 
-    db.prepare(
-      'DELETE FROM plots WHERE survey=? AND sheet=? AND plot_no=?'
-    ).run(survey, sheet, plotNo);
+    db.prepare('DELETE FROM plots WHERE id=?').run(existing.id);
 
     res.json({
       deleted: true,

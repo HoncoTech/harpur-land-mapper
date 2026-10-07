@@ -50,6 +50,20 @@ let addRefreshTimer = null;
 let lastOverlaySignature = '';
 let addReconstructSeq = 0;
 
+
+function normalizeSurvey(value){
+  return String(value||'').trim().toUpperCase();
+}
+function normalizePlotNo(value){
+  return String(value??'').trim();
+}
+function sameSurveyPlot(a,b){
+  return !!a && !!b && normalizeSurvey(a.survey)===normalizeSurvey(b.survey) && normalizePlotNo(a.plot_no)===normalizePlotNo(b.plot_no);
+}
+function findSavedPlotBySurveyPlot(target){
+  return savedPlots.find(p=>sameSurveyPlot(p,target)) || null;
+}
+
 /* ----------------------------- NAVIGATION ----------------------------- */
 function setView(view){
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === `view-${view}`));
@@ -800,6 +814,9 @@ function focusSavedPlot(p, zoom=true){
 
   activeSavedPlot=p;
   renderSavedList();
+  requestAnimationFrame(()=>{
+    document.querySelector(`#savedList .plot-row[data-id="${CSS.escape(String(p.id))}"]`)?.scrollIntoView({block:'nearest'});
+  });
 
   const pos={lat:Number(p.center_lat),lng:Number(p.center_lng)};
   savedMap.panTo(pos);
@@ -1319,17 +1336,17 @@ async function lookupAddPlot(latLng){
     if(seq!==addReconstructSeq||selectedPlot!==target)return;
     drawSelectedGeometry(target.geometry);
     $('selectionMeasure').textContent=measurementSummary(target)||'Parcel shape reconstructed.';
-    {const ex=savedPlots.find(x=>String(x.plot_no)===String(target.plot_no)&&String(x.gis_code||'')===String(target.gis_code||''));$('addStatus').textContent=ex?`Plot ${target.plot_no} exists • fresh parcel shape captured. Existing information loaded for update.`:`Plot ${target.plot_no} shape ready. Confirm to add details.`;$('addThisPlot').textContent=ex?'Open / Update Plot':'Add This Plot';if(ex)openDetailsForSelected();}
+    {const ex=findSavedPlotBySurveyPlot(target);$('addStatus').textContent=ex?`Plot ${target.plot_no} exists • fresh parcel shape captured. Existing information loaded for update.`:`Plot ${target.plot_no} shape ready. Confirm to add details.`;$('addThisPlot').textContent=ex?'Open / Update Plot':'Add This Plot';}
   }catch(err){
     if(seq!==addReconstructSeq)return;
     $('selectionMeasure').textContent='Shape unavailable now • BBox will remain as fallback.';
-    {const ex=savedPlots.find(x=>String(x.plot_no)===String(selectedPlot.plot_no)&&String(x.gis_code||'')===String(selectedPlot.gis_code||''));$('addStatus').textContent=ex?`Plot ${selectedPlot.plot_no} exists • shape capture failed, BBox fallback retained. Existing information loaded.`:`Plot ${selectedPlot.plot_no} selected • shape trace unavailable; you can still continue.`;if(ex)openDetailsForSelected();}
+    {const ex=findSavedPlotBySurveyPlot(selectedPlot);$('addStatus').textContent=ex?`Plot ${selectedPlot.plot_no} exists • shape capture failed, BBox fallback retained. Existing information loaded.`:`Plot ${selectedPlot.plot_no} selected • shape trace unavailable; you can still continue.`;}
   }
 }
 function plotCenterFromBBox(p){const x=(Number(p.xmin)+Number(p.xmax))/2,y=(Number(p.ymin)+Number(p.ymax))/2,[lng,lat]=proj4('EPSG:32645','EPSG:4326',[x,y]);return{lat,lng};}
 function mapUrl(lat,lng){return`https://www.google.com/maps?q=${lat.toFixed(8)},${lng.toFixed(8)}`;}
 function showPlotSelectionCard(){
-  const p=selectedPlot;if(!p)return;const existing=savedPlots.find(x=>String(x.plot_no)===String(p.plot_no)&&String(x.gis_code||'')===String(p.gis_code||''));$('saveSuccessCard').classList.add('hidden');$('plotDetailsPanel').classList.add('hidden');$('selectionPlotNo').textContent=p.plot_no;$('selectionMeta').textContent=`${p.survey} • ${$('mapInstanceSelect').selectedOptions[0]?.textContent||p.map_instance} • Sheet ${p.sheet}${existing?' • Already saved':''}`;$('selectionPniu').textContent=p.pniu?`PNIU ${p.pniu}`:'PNIU not returned';$('selectionMeasure').textContent=measurementSummary(p)||'Preparing parcel shape…';$('plotSelectionCard').classList.remove('hidden');$('addThisPlot').textContent=existing?'Open / Update Plot':'Add This Plot';$('addStatus').textContent=existing?`Plot ${p.plot_no} already exists. Fresh geometry will be captured from this visible survey selection.`:`Plot ${p.plot_no} selected. Confirm to add details.`;
+  const p=selectedPlot;if(!p)return;const existing=findSavedPlotBySurveyPlot(p);$('saveSuccessCard').classList.add('hidden');$('plotDetailsPanel').classList.add('hidden');$('selectionPlotNo').textContent=p.plot_no;$('selectionMeta').textContent=`${p.survey} • ${$('mapInstanceSelect').selectedOptions[0]?.textContent||p.map_instance} • Sheet ${p.sheet}${existing?' • Already saved':''}`;$('selectionPniu').textContent=p.pniu?`PNIU ${p.pniu}`:'PNIU not returned';$('selectionMeasure').textContent=measurementSummary(p)||'Preparing parcel shape…';$('plotSelectionCard').classList.remove('hidden');$('addThisPlot').textContent=existing?'Open / Update Plot':'Add This Plot';$('addStatus').textContent=existing?`Plot ${p.plot_no} already exists. Fresh geometry will be captured from this visible survey selection.`:`Plot ${p.plot_no} selected. Confirm to add details.`;
 }
 
 function drawSelectedGeometry(geometry){if(selectedPolygon){selectedPolygon.setMap(null);selectedPolygon=null;}if(!geometry)return;const geom=geometry.type==='Feature'?geometry.geometry:geometry;if(geom?.type==='Polygon'&&geom.coordinates?.[0])selectedPolygon=new google.maps.Polygon({paths:geom.coordinates[0].map(([lng,lat])=>({lat,lng})),map:addMap,strokeWeight:4,fillOpacity:.28,clickable:false});}
@@ -1365,7 +1382,7 @@ function updateTechnicalMeasurements(p){
 }
 function openDetailsForSelected(){
   const p=selectedPlot;if(!p)return;$('plotSelectionCard').classList.add('hidden');$('plotDetailsPanel').classList.remove('hidden');$('plotNo').textContent=p.plot_no;$('plotPanelSubtitle').textContent=`${p.survey} • ${$('mapInstanceSelect').selectedOptions[0]?.textContent||p.map_instance} • Sheet ${p.sheet}`;$('plotSurvey').textContent=p.survey||'—';$('plotMapInstance').textContent=p.map_instance||'—';$('plotSheet').textContent=p.sheet;$('pniu').textContent=p.pniu||'—';$('plotId').textContent=p.plot_id||'—';$('nativeXY').textContent=(p.seed_x!=null&&p.seed_y!=null)?`${Number(p.seed_x).toFixed(3)}, ${Number(p.seed_y).toFixed(3)}`:'—';$('centerLatLng').textContent=`${Number(p.center_lat).toFixed(8)}, ${Number(p.center_lng).toFixed(8)}`;$('googleMapLink').href=p.google_map_url||mapUrl(Number(p.center_lat),Number(p.center_lng));$('googleMapLink').classList.remove('hidden');
-  const existing=savedPlots.find(x=>String(x.plot_no)===String(p.plot_no)&&String(x.gis_code||'')===String(p.gis_code||''));
+  const existing=findSavedPlotBySurveyPlot(p);
   const src=existing||p;$('exactRaiyatName').value=src.exact_raiyat_name||'';$('landType').value=src.land_type||'';$('khesraNo').value=src.khesra_no||p.plot_no;$('mauzaField').value=p.mauza||'';$('thanaNo').value=src.thana_no||'';$('jamabandiNo').value=src.jamabandi_no||'';$('partNo').value=src.part_no||'';$('pageNo').value=src.page_no||'';$('computerizedJamabandiNo').value=src.computerized_jamabandi_no||'';$('khataNo').value=src.khata_no||'';$('plotAreaDecimal').value=src.plot_area_decimal??'';$('jamabandiTotalAreaDecimal').value=src.jamabandi_total_area_decimal??'';$('localName').value=src.local_name||'';$('notes').value=src.notes||'';$('locationSelect').value=src.location_id?String(src.location_id):'';
   if(src.family_id)$('familySelect').value=String(src.family_id);populateOwnerControls();setOwnershipType(src.ownership_type||'Individual');if(src.primary_family_member_id)$('primaryOwnerSelect').value=String(src.primary_family_member_id);selectedCoOwnerIds=new Set((src.coowner_ids||[]).map(Number));renderCoOwnerList();renderCoOwnerChips();updateBigha();$('deletePlot').classList.toggle('hidden',!existing);
   const freshGeometry=validGeometry(p)?p.geometry:null,fallbackGeometry=existing&&validGeometry(existing)?existing.geometry:null,geometry=freshGeometry||fallbackGeometry;if(geometry){p.geometry=geometry;p.source=freshGeometry?p.source:(existing?.source||p.source||'');drawSelectedGeometry(geometry);}else{p.geometry=null;drawSelectedGeometry(null);}if(!freshGeometry&&fallbackGeometry)applyMeasurements(p,existing);else if(!freshGeometry&&!fallbackGeometry){['calculated_area_sqm','calculated_area_decimal','perimeter_m','approx_length_m','approx_width_m','bbox_width_m','bbox_height_m','bbox_area_sqm'].forEach(k=>{p[k]=null;});p.measurements=null;p.geometry_status='INVALID';}updateTechnicalMeasurements(p);$('savePlot').textContent=existing?'Update Plot':'Save Plot';if($('plotPanelMode'))$('plotPanelMode').textContent=existing?'Existing family plot • update':'New family plot';setTimeout(()=>{google.maps.event.trigger(addMap,'resize');},40);
@@ -1394,46 +1411,88 @@ async function initAddWorkflow(){
 
 $('reconstruct').onclick=async()=>{if(!selectedPlot)return;try{$('addStatus').textContent=`Reconstructing ${selectedPlot.survey} Plot ${selectedPlot.plot_no}…`;await reconstructPlotShape(selectedPlot);drawSelectedGeometry(selectedPlot.geometry);updateTechnicalMeasurements(selectedPlot);$('selectionMeasure').textContent=measurementSummary(selectedPlot)||'Parcel shape reconstructed.';$('addStatus').textContent=`Plot ${selectedPlot.plot_no} polygon reconstructed.`;}catch(err){alert(err.message);}};
 $('savePlot').onclick=async()=>{if(!selectedPlot)return;try{const body=buildPlotSaveBody(),r=await fetch('/api/plots',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}),d=await r.json();if(!r.ok)throw new Error(d.error||'Save failed');selectedPlot={...d,geometry:d.geometry||selectedPlot.geometry};$('plotDetailsPanel').classList.add('hidden');$('savedPlotNo').textContent=body.plot_no;$('saveSuccessCard').classList.remove('hidden');$('addStatus').textContent=`${body.survey} Plot ${body.plot_no} saved / updated.`;await loadSavedPlots();}catch(err){alert(err.message);}};
-$('deletePlot').onclick=async()=>{if(!selectedPlot)return;const existing=savedPlots.find(x=>String(x.plot_no)===String(selectedPlot.plot_no)&&String(x.gis_code||'')===String(selectedPlot.gis_code||''));if(!existing)return;if(!confirm(`Delete ${selectedPlot.survey} Plot ${selectedPlot.plot_no} from our database?`))return;const url=`/api/plots/${encodeURIComponent(selectedPlot.survey)}/${encodeURIComponent(selectedPlot.sheet)}/${encodeURIComponent(selectedPlot.plot_no)}`,r=await fetch(url,{method:'DELETE'}),d=await r.json();if(!r.ok)return alert(d.error||'Delete failed');clearAddSelection();await loadSavedPlots();$('addStatus').textContent=`Plot ${existing.plot_no} deleted.`;};
+$('deletePlot').onclick=async()=>{if(!selectedPlot)return;const existing=findSavedPlotBySurveyPlot(selectedPlot);if(!existing)return;if(!confirm(`Delete ${selectedPlot.survey} Plot ${selectedPlot.plot_no} from our database?`))return;const url=`/api/plots/${encodeURIComponent(selectedPlot.survey)}/${encodeURIComponent(existing.sheet||selectedPlot.sheet||'')}/${encodeURIComponent(selectedPlot.plot_no)}`,r=await fetch(url,{method:'DELETE'}),d=await r.json();if(!r.ok)return alert(d.error||'Delete failed');clearAddSelection();await loadSavedPlots();$('addStatus').textContent=`Plot ${existing.plot_no} deleted.`;};
 
 $('mauzaSelect').onchange=async e=>{currentMauza=e.target.value;localStorage.setItem('harpurMauza',currentMauza);currentSurvey='';currentMapInstance='';currentSheet='';try{await loadSurveys();}catch(err){alert(err.message);}};
 $('surveySelect').onchange=async e=>{currentSurvey=e.target.value;currentMapInstance='';currentSheet='';try{await loadMapInstances();}catch(err){alert(err.message);}};
 $('mapInstanceSelect').onchange=async e=>{currentMapInstance=e.target.value;currentSheet='';try{await loadSheets();}catch(err){alert(err.message);}};
 $('sheetSelect').onchange=async e=>{currentSheet=e.target.value;if(!currentSheet){clearMapContextAndSelection(true);return;}try{await loadSelectedMapContext();}catch(err){alert(err.message);setLifecycleHint(err.message);setMapLoading(false);}};
 $('showNaksha').onchange=()=>scheduleAddOverlayRefresh(true);$('opacity').oninput=e=>{$('opacityValue').textContent=`${e.target.value}%`;overlayView?.setOpacity(Number(e.target.value)/100);};$('fitSheet').onclick=fitAddSheet;$('reloadSheet').onclick=()=>scheduleAddOverlayRefresh(true);
-$('addThisPlot').onclick=openDetailsForSelected;$('clearPlotSelection').onclick=()=>{clearAddSelection();$('addStatus').textContent='Tap a parcel to select.';};$('closePlotSelection').onclick=()=>{clearAddSelection();$('addStatus').textContent=`${currentSurvey} Sheet ${currentSheet} ready • tap a parcel to select.`;};$('closePlotDetails').onclick=()=>{$('plotDetailsPanel').classList.add('hidden');showPlotSelectionCard();};$('cancelPlotDetails').onclick=()=>{$('plotDetailsPanel').classList.add('hidden');showPlotSelectionCard();};
+$('addThisPlot').onclick=openDetailsForSelected;$('closePlotSelection').onclick=()=>{clearAddSelection();$('addStatus').textContent=`${currentSurvey} Sheet ${currentSheet} ready • tap a parcel to select.`;};$('closePlotDetails').onclick=()=>{$('plotDetailsPanel').classList.add('hidden');showPlotSelectionCard();};$('cancelPlotDetails').onclick=()=>{$('plotDetailsPanel').classList.add('hidden');showPlotSelectionCard();};
+
+// Selection-card UX: clicking anywhere outside the card dismisses the current map selection.
+document.addEventListener('pointerdown',e=>{
+  const card=$('plotSelectionCard');
+  if(!card || card.classList.contains('hidden') || $('plotDetailsPanel')?.classList.contains('hidden')===false) return;
+  if(card.contains(e.target)) return;
+  clearAddSelection();
+  $('addStatus').textContent=`${currentSurvey} Sheet ${currentSheet} ready • tap a parcel to select.`;
+},{capture:true});
 $('ownershipIndividual').onclick=()=>setOwnershipType('Individual');$('ownershipJoint').onclick=()=>setOwnershipType('Joint');$('familySelect').onchange=()=>{selectedCoOwnerIds.clear();populateOwnerControls();};$('plotAreaDecimal').oninput=updateBigha;
 $('openCoOwnerPicker').onclick=()=>{$('coOwnerPicker').classList.remove('hidden');renderCoOwnerList();};$('closeCoOwnerPicker').onclick=()=>{$('coOwnerPicker').classList.add('hidden');};$('coOwnerDone').onclick=()=>{$('coOwnerPicker').classList.add('hidden');};$('coOwnerSearch').oninput=renderCoOwnerList;
 $('mobileMapSettingsBtn').onclick=()=>{$('mobileMapSettings').classList.remove('hidden');syncMobileMapControls();};$('closeMobileMapSettings').onclick=()=>$('mobileMapSettings').classList.add('hidden');$('mobileSettingsDone').onclick=()=>$('mobileMapSettings').classList.add('hidden');$('mobileFitSheet').onclick=fitAddSheet;$('mobileRefreshSheet').onclick=()=>scheduleAddOverlayRefresh(true);
 [['mobileMauzaMirror','mauzaSelect'],['mobileSurveyMirror','surveySelect'],['mobileMapMirror','mapInstanceSelect'],['mobileSheetMirror','sheetSelect']].forEach(([mirror,source])=>{$(mirror).onchange=()=>{const src=$(source);src.value=$(mirror).value;src.dispatchEvent(new Event('change'));};});
-$('addAnotherPlot').onclick=()=>{clearAddSelection();$('addStatus').textContent=`${currentSurvey} Sheet ${currentSheet} ready • tap another parcel.`;};$('viewSavedPlot').onclick=()=>{const p=selectedPlot;setView('saved');if(p){const saved=savedPlots.find(x=>String(x.gis_code)===String(p.gis_code)&&String(x.plot_no)===String(p.plot_no));if(saved)focusSavedPlot(saved,true);}};
+$('addAnotherPlot').onclick=()=>{clearAddSelection();$('addStatus').textContent=`${currentSurvey} Sheet ${currentSheet} ready • tap another parcel.`;};
+$('viewSavedPlot').onclick=()=>{
+  const p=selectedPlot;
+  if(!p) return;
+  const targetSurvey=normalizeSurvey(p.survey);
+  if(targetSurvey && targetSurvey!==normalizeSurvey(savedSurvey)) setSavedSurvey(targetSurvey);
+  else if(targetSurvey){ savedSurvey=targetSurvey; localStorage.setItem('harpurSavedSurvey',savedSurvey); renderSurveySegments(); refreshSavedSheetOptions(); }
+  setView('saved');
+  setTimeout(()=>{
+    const saved=findSavedPlotBySurveyPlot(p);
+    if(saved) focusSavedPlot(saved,true);
+  },120);
+};
 
 
 /* Add Plot accordion UX: Plot Identity is always visible.
-   Desktop allows two other sections open; mobile allows one. */
+   Exactly one additional section may be open on desktop or mobile. */
 function setupPlotDetailsAccordions(){
   const details=[...document.querySelectorAll('#plotForm details')];
-  let openOrder=details.filter(d=>d.open);
-  const limit=()=>window.matchMedia('(max-width:900px)').matches?1:2;
-  const enforce=(opened)=>{
-    if(!opened.open)return;
-    openOrder=openOrder.filter(d=>d!==opened && d.open);
-    openOrder.push(opened);
-    while(openOrder.length>limit()){
-      const oldest=openOrder.shift();
-      if(oldest && oldest!==opened)oldest.open=false;
-    }
+  let busy=false;
+  const keepOnly=(opened)=>{
+    if(busy || !opened.open) return;
+    busy=true;
+    details.forEach(d=>{ if(d!==opened && d.open) d.open=false; });
+    busy=false;
   };
-  details.forEach(d=>d.addEventListener('toggle',()=>enforce(d)));
-  window.addEventListener('resize',()=>{
-    openOrder=openOrder.filter(d=>d.open);
-    while(openOrder.length>limit()){
-      const oldest=openOrder.shift();
-      if(oldest)oldest.open=false;
-    }
-  });
+  details.forEach(d=>d.addEventListener('toggle',()=>keepOnly(d)));
+  const initiallyOpen=details.filter(d=>d.open);
+  initiallyOpen.slice(1).forEach(d=>d.open=false);
 }
 setupPlotDetailsAccordions();
+
+function syncResponsiveSavedChrome(){
+  const mobile=isMobileSavedMode();
+  const toolbar=$('mobileSavedToolbar');
+  if(!mobile){
+    clearTimeout(mobileToolbarTimer);
+    mobileDrawerOpen=false;
+    toolbar?.classList.add('hidden','toolbar-hidden');
+    $('mobilePlotsDrawer')?.classList.remove('open');
+    $('mobileBoxesPanel')?.classList.add('hidden');
+    hideMobilePlotPopup();
+  }else if(document.getElementById('view-saved')?.classList.contains('active')){
+    toolbar?.classList.remove('hidden');
+    showMobileToolbar(true);
+  }
+  if(savedMap){
+    google.maps.event.trigger(savedMap,'resize');
+    renderSavedMarkers();
+    renderSavedList();
+    if(mobile){
+      ensureAllMobilePlotsSelected();
+      renderMobileSavedList();
+      updateMobileSelectedVisibility();
+    }
+    if(activeSavedPlot) setTimeout(()=>focusSavedPlot(activeSavedPlot,false),30);
+  }
+}
+const savedMobileMedia=window.matchMedia('(max-width:900px)');
+if(savedMobileMedia.addEventListener) savedMobileMedia.addEventListener('change',()=>setTimeout(syncResponsiveSavedChrome,0));
+else if(savedMobileMedia.addListener) savedMobileMedia.addListener(()=>setTimeout(syncResponsiveSavedChrome,0));
 
 /* ----------------------------- UTIL ----------------------------- */
 function escapeHtml(s){
