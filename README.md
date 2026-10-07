@@ -58,3 +58,8 @@ BhuNaksha overlays and reconstructed parcel geometry are for family reference an
 - Plot Identity stays open and only one additional Add Plot section may be open.
 - Desktop/mobile resize now re-evaluates the mobile Saved Plots toolbar.
 - Add Plot detail header spacing was reduced to improve vertical space.
+
+
+## v7.7 reconstruction fallback fix
+
+Parcel-shape reconstruction is now non-fatal. If BhuNaksha parcel tracing cannot produce a valid irregular polygon, `/api/reconstruct` returns an `INVALID` geometry warning instead of a 502 error. Add/Update continues using the parcel BBox fallback. A previously valid saved polygon is preserved when a new reconstruction attempt fails. The manual Reconstruct action reports the warning in the page status instead of blocking the workflow with an alert.

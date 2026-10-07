@@ -792,7 +792,31 @@ app.post('/api/reconstruct',async(req,res)=>{
       },
       geometry:reconstructed.geometry
     });
-  }catch(err){console.error('reconstruct:',err);res.status(502).json({error:err.message});}
+  }catch(err){
+    console.error('reconstruct:',err);
+    // Parcel geometry is an enhancement. If tracing/rendering fails but the
+    // caller supplied valid parcel metadata, return a non-fatal warning so
+    // Add/Update can continue using the parcel BBox as the fallback geometry.
+    res.json({
+      type:'Feature',
+      properties:{
+        plotNo:String(req.body?.plot_no||''),
+        survey:String(req.body?.survey||''),
+        sheet:String(req.body?.sheet||''),
+        gisCode:String(req.body?.gis_code||req.body?.gisCode||''),
+        plotId:String(req.body?.plot_id||''),
+        pniu:String(req.body?.pniu||''),
+        source:'',
+        measurements:null,
+        validation:null,
+        geometryVersion:3,
+        geometryStatus:'INVALID',
+        warning:err.message||'Parcel shape reconstruction failed'
+      },
+      geometry:null,
+      warning:err.message||'Parcel shape reconstruction failed'
+    });
+  }
 });
 
 app.get('/api/reference-data',(req,res)=>{
@@ -986,4 +1010,4 @@ app.delete('/api/plots/:survey/:sheet/:plotNo', (req,res) => {
   }
 });
 
-app.listen(PORT,()=>console.log(`Harpur Land Mapper V7.1 Map-First: http://localhost:${PORT}`));
+app.listen(PORT,()=>console.log(`Harpur Land Mapper V7.7 Reconstruct Fallback: http://localhost:${PORT}`));

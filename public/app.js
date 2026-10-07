@@ -1296,6 +1296,11 @@ function measurementSummary(p){
 }
 async function reconstructPlotShape(p,{persist=false}={}){
   if(!p?.plot_id||!validBBox(p))throw new Error('Plot ID/BBox not available for shape reconstruction.');
+  const previousGeometry=validGeometry(p)?p.geometry:null;
+  const previousMeasurements=p.measurements?{...p.measurements}:null;
+  const previousStatus=p.geometry_status||null;
+  const previousVersion=p.geometry_version||null;
+  const previousSource=p.source||p.geometry_source||'';
   const r=await fetch('/api/reconstruct',{
     method:'POST',
     headers:{'Content-Type':'application/json'},
@@ -1303,12 +1308,35 @@ async function reconstructPlotShape(p,{persist=false}={}){
   });
   const f=await r.json();
   if(!r.ok)throw new Error(f.error||'Shape reconstruction failed');
+
+  const status=f.properties?.geometryStatus||((f.geometry)?'VALID':'INVALID');
+  const warning=f.warning||f.properties?.warning||'';
+  if(!f.geometry||status!=='VALID'){
+    // Non-fatal reconstruction miss: keep any previously valid geometry,
+    // otherwise retain BBox-only mode. Do not let shape tracing block save/update.
+    if(previousGeometry){
+      p.geometry=previousGeometry;
+      p.source=previousSource;
+      p.geometry_source=previousSource;
+      p.geometry_status=previousStatus||'VALID';
+      p.geometry_version=previousVersion||p.geometry_version||2;
+      if(previousMeasurements)applyMeasurements(p,previousMeasurements);
+    }else{
+      p.geometry=null;
+      p.geometry_status='INVALID';
+      p.geometry_version=f.properties?.geometryVersion||p.geometry_version||3;
+    }
+    p.reconstruct_warning=warning||'Parcel shape unavailable; BBox fallback retained.';
+    return {plot:p,ok:false,warning:p.reconstruct_warning};
+  }
+
   p.geometry=f.geometry;
   p.source=f.properties?.source||p.source||'';
   p.geometry_source=p.source;
-  p.geometry_status=f.properties?.geometryStatus||'VALID';
-  p.geometry_version=f.properties?.geometryVersion||2;
+  p.geometry_status='VALID';
+  p.geometry_version=f.properties?.geometryVersion||3;
   applyMeasurements(p,f.properties?.measurements||{});
+  p.reconstruct_warning='';
   if(persist && p.id){
     const save=await fetch('/api/plots',{
       method:'POST',
@@ -1319,7 +1347,7 @@ async function reconstructPlotShape(p,{persist=false}={}){
     if(!save.ok)throw new Error(d.error||'Could not cache parcel shape');
     Object.assign(p,d);
   }
-  return p;
+  return {plot:p,ok:true,warning:''};
 }
 async function lookupAddPlot(latLng){
   if(!addConfig)throw new Error('Survey map is still loading.');placeAddPin(latLng);const [x,y]=proj4('EPSG:4326','EPSG:32645',[latLng.lng(),latLng.lat()]);$('addStatus').textContent=`Identifying ${currentSurvey} plot…`;
@@ -1332,11 +1360,17 @@ async function lookupAddPlot(latLng){
   $('selectionMeasure').textContent='Tracing irregular parcel shape…';
   try{
     const target=selectedPlot;
-    await reconstructPlotShape(target);
+    const result=await reconstructPlotShape(target);
     if(seq!==addReconstructSeq||selectedPlot!==target)return;
-    drawSelectedGeometry(target.geometry);
-    $('selectionMeasure').textContent=measurementSummary(target)||'Parcel shape reconstructed.';
-    {const ex=findSavedPlotBySurveyPlot(target);$('addStatus').textContent=ex?`Plot ${target.plot_no} exists • fresh parcel shape captured. Existing information loaded for update.`:`Plot ${target.plot_no} shape ready. Confirm to add details.`;$('addThisPlot').textContent=ex?'Open / Update Plot':'Add This Plot';}
+    if(result.ok){
+      drawSelectedGeometry(target.geometry);
+      $('selectionMeasure').textContent=measurementSummary(target)||'Parcel shape reconstructed.';
+      {const ex=findSavedPlotBySurveyPlot(target);$('addStatus').textContent=ex?`Plot ${target.plot_no} exists • fresh parcel shape captured. Existing information loaded for update.`:`Plot ${target.plot_no} shape ready. Confirm to add details.`;$('addThisPlot').textContent=ex?'Open / Update Plot':'Add This Plot';}
+    }else{
+      drawSelectedGeometry(target.geometry);
+      $('selectionMeasure').textContent='Shape unavailable now • BBox will remain as fallback.';
+      {const ex=findSavedPlotBySurveyPlot(target);$('addStatus').textContent=ex?`Plot ${target.plot_no} exists • shape capture unavailable, BBox fallback retained. Existing information loaded.`:`Plot ${target.plot_no} selected • shape trace unavailable; you can still continue.`;$('addThisPlot').textContent=ex?'Open / Update Plot':'Add This Plot';}
+    }
   }catch(err){
     if(seq!==addReconstructSeq)return;
     $('selectionMeasure').textContent='Shape unavailable now • BBox will remain as fallback.';
@@ -1409,7 +1443,7 @@ async function initAddWorkflow(){
   }finally{addWorkflowInitializing=false;}
 }
 
-$('reconstruct').onclick=async()=>{if(!selectedPlot)return;try{$('addStatus').textContent=`Reconstructing ${selectedPlot.survey} Plot ${selectedPlot.plot_no}…`;await reconstructPlotShape(selectedPlot);drawSelectedGeometry(selectedPlot.geometry);updateTechnicalMeasurements(selectedPlot);$('selectionMeasure').textContent=measurementSummary(selectedPlot)||'Parcel shape reconstructed.';$('addStatus').textContent=`Plot ${selectedPlot.plot_no} polygon reconstructed.`;}catch(err){alert(err.message);}};
+$('reconstruct').onclick=async()=>{if(!selectedPlot)return;try{$('addStatus').textContent=`Reconstructing ${selectedPlot.survey} Plot ${selectedPlot.plot_no}…`;const result=await reconstructPlotShape(selectedPlot);drawSelectedGeometry(selectedPlot.geometry);updateTechnicalMeasurements(selectedPlot);if(result.ok){$('selectionMeasure').textContent=measurementSummary(selectedPlot)||'Parcel shape reconstructed.';$('addStatus').textContent=`Plot ${selectedPlot.plot_no} polygon reconstructed.`;}else{$('selectionMeasure').textContent='Shape unavailable now • BBox will remain as fallback.';$('addStatus').textContent=`Plot ${selectedPlot.plot_no}: ${result.warning||'shape trace unavailable'} You can still save / update using BBox fallback.`;}}catch(err){$('addStatus').textContent=`Shape reconstruction error: ${err.message}. You can still save / update using BBox fallback.`;}};
 $('savePlot').onclick=async()=>{if(!selectedPlot)return;try{const body=buildPlotSaveBody(),r=await fetch('/api/plots',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}),d=await r.json();if(!r.ok)throw new Error(d.error||'Save failed');selectedPlot={...d,geometry:d.geometry||selectedPlot.geometry};$('plotDetailsPanel').classList.add('hidden');$('savedPlotNo').textContent=body.plot_no;$('saveSuccessCard').classList.remove('hidden');$('addStatus').textContent=`${body.survey} Plot ${body.plot_no} saved / updated.`;await loadSavedPlots();}catch(err){alert(err.message);}};
 $('deletePlot').onclick=async()=>{if(!selectedPlot)return;const existing=findSavedPlotBySurveyPlot(selectedPlot);if(!existing)return;if(!confirm(`Delete ${selectedPlot.survey} Plot ${selectedPlot.plot_no} from our database?`))return;const url=`/api/plots/${encodeURIComponent(selectedPlot.survey)}/${encodeURIComponent(existing.sheet||selectedPlot.sheet||'')}/${encodeURIComponent(selectedPlot.plot_no)}`,r=await fetch(url,{method:'DELETE'}),d=await r.json();if(!r.ok)return alert(d.error||'Delete failed');clearAddSelection();await loadSavedPlots();$('addStatus').textContent=`Plot ${existing.plot_no} deleted.`;};
 

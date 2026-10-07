@@ -1,6 +1,6 @@
 {
-  "name": "harpur-land-mapper-v7.6-review-fixes",
-  "version": "7.6.0",
+  "name": "harpur-land-mapper-v7.7-reconstruct-fallback",
+  "version": "7.7.0",
   "private": true,
   "description": "Map-first Harpur Land Mapper with CS/RS, reconstructed parcel shapes and map measurements.",
   "main": "server.js",
