@@ -4,6 +4,7 @@ const path = require('path');
 const Database = require('better-sqlite3');
 const proj4 = require('proj4');
 const sharp = require('sharp');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -158,6 +159,16 @@ CREATE TABLE IF NOT EXISTS plot_coowners (
   FOREIGN KEY (family_member_id) REFERENCES family_members(id),
   UNIQUE (plot_id, family_member_id)
 );
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  username TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('ADMIN','FAMILY_EDITOR','FAMILY_VIEWER')),
+  is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)),
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_login_at TEXT
+);
 `);
 
 
@@ -228,6 +239,121 @@ function seedFamilyReferenceData(){
 seedFamilyReferenceData();
 
 app.use(express.json({limit:'3mb'}));
+app.set('trust proxy', 1);
+
+/* ----------------------------- AUTHENTICATION -----------------------------
+   The deployed database contains a pre-populated ADMIN user. The PIN itself is
+   never stored in source or SQLite; only a salted scrypt hash is persisted. */
+const SESSION_COOKIE = 'harpur_session';
+const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
+const sessions = new Map();
+const loginFailures = new Map();
+
+function decodeBase64Url(value){
+  const s=String(value||'').replace(/-/g,'+').replace(/_/g,'/');
+  return Buffer.from(s + '='.repeat((4 - s.length % 4) % 4), 'base64');
+}
+
+function verifyPin(pin, encodedHash){
+  try{
+    const parts=String(encodedHash||'').split('$');
+    if(parts.length!==6 || parts[0]!=='scrypt') return false;
+    const N=Number(parts[1]), r=Number(parts[2]), p=Number(parts[3]);
+    if(!Number.isInteger(N)||!Number.isInteger(r)||!Number.isInteger(p)||N<2||r<1||p<1) return false;
+    const salt=decodeBase64Url(parts[4]);
+    const expected=decodeBase64Url(parts[5]);
+    const actual=crypto.scryptSync(String(pin),salt,expected.length,{N,r,p,maxmem:64*1024*1024});
+    return actual.length===expected.length && crypto.timingSafeEqual(actual,expected);
+  }catch(_){ return false; }
+}
+
+function parseCookies(req){
+  const out={};
+  for(const chunk of String(req.headers.cookie||'').split(';')){
+    const i=chunk.indexOf('=');
+    if(i<0) continue;
+    const key=chunk.slice(0,i).trim();
+    if(!key) continue;
+    out[key]=decodeURIComponent(chunk.slice(i+1).trim());
+  }
+  return out;
+}
+
+function getSession(req){
+  const token=parseCookies(req)[SESSION_COOKIE];
+  if(!token) return null;
+  const session=sessions.get(token);
+  if(!session) return null;
+  if(Date.now()-session.lastSeen>SESSION_TTL_MS){
+    sessions.delete(token);
+    return null;
+  }
+  session.lastSeen=Date.now();
+  return {token,session};
+}
+
+function setSessionCookie(req,res,token){
+  const secure=req.secure || String(req.headers['x-forwarded-proto']||'').split(',')[0].trim()==='https';
+  res.setHeader('Set-Cookie',`${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax${secure?'; Secure':''}`);
+}
+
+function clearSessionCookie(req,res){
+  const secure=req.secure || String(req.headers['x-forwarded-proto']||'').split(',')[0].trim()==='https';
+  res.setHeader('Set-Cookie',`${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure?'; Secure':''}`);
+}
+
+function failureKey(req,username){ return `${req.ip||'unknown'}:${String(username||'').toLowerCase()}`; }
+function loginBlocked(key){
+  const item=loginFailures.get(key);
+  if(!item) return false;
+  if(Date.now()-item.windowStart>5*60*1000){ loginFailures.delete(key); return false; }
+  return item.count>=8;
+}
+function recordLoginFailure(key){
+  const now=Date.now();
+  const item=loginFailures.get(key);
+  if(!item || now-item.windowStart>5*60*1000) loginFailures.set(key,{count:1,windowStart:now});
+  else item.count+=1;
+}
+
+app.post('/api/auth/login',(req,res)=>{
+  const username=String(req.body?.username||'').trim().toLowerCase();
+  const pin=String(req.body?.pin||'');
+  const key=failureKey(req,username);
+  if(loginBlocked(key)) return res.status(429).json({error:'Too many attempts. Try again in a few minutes.'});
+  const user=db.prepare('SELECT id,username,password_hash,role,is_active FROM users WHERE lower(username)=? LIMIT 1').get(username);
+  if(!user || !user.is_active || user.role!=='ADMIN' || !verifyPin(pin,user.password_hash)){
+    recordLoginFailure(key);
+    return res.status(401).json({error:'Invalid username or PIN'});
+  }
+  loginFailures.delete(key);
+  const token=crypto.randomBytes(32).toString('hex');
+  sessions.set(token,{userId:user.id,username:user.username,role:user.role,createdAt:Date.now(),lastSeen:Date.now()});
+  db.prepare('UPDATE users SET last_login_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE id=?').run(user.id);
+  setSessionCookie(req,res,token);
+  res.json({authenticated:true,user:{username:user.username,role:user.role}});
+});
+
+app.get('/api/auth/session',(req,res)=>{
+  const found=getSession(req);
+  if(!found) return res.json({authenticated:false});
+  res.json({authenticated:true,user:{username:found.session.username,role:found.session.role}});
+});
+
+app.post('/api/auth/logout',(req,res)=>{
+  const found=getSession(req);
+  if(found) sessions.delete(found.token);
+  clearSessionCookie(req,res);
+  res.json({ok:true});
+});
+
+app.use('/api',(req,res,next)=>{
+  const found=getSession(req);
+  if(!found) return res.status(401).json({error:'Authentication required'});
+  req.user=found.session;
+  next();
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 function clamp(n, lo, hi) {
@@ -318,8 +444,8 @@ async function proxyPng(url, res, logLabel='BhuNaksha') {
 app.get('/api/app-config', (req,res) => {
   res.json({
     name: 'Harpur Land Mapper',
-    version: '7.2.0',
-    release: '7.2 Parcel Shapes & Measurements',
+    version: '7.9.0',
+    release: '7.9 PIN Login & Tablet/Desktop Saved Panel',
     googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY || ''
   });
 });
@@ -327,8 +453,8 @@ app.get('/api/app-config', (req,res) => {
 app.get('/api/about', (req,res) => {
   res.json({
     name: 'Harpur Land Mapper',
-    version: '7.2.0',
-    release: '7.2 Parcel Shapes & Measurements',
+    version: '7.9.0',
+    release: '7.9 PIN Login & Tablet/Desktop Saved Panel',
     survey: 'Dynamic CS / RS',
     village: 'Harpur(199) default; Mauza selectable',
     circle: 'Rajpur',

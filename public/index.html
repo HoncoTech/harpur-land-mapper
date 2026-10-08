@@ -3,12 +3,28 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Harpur Land Mapper V7.5</title>
+<title>Harpur Land Mapper V7.9</title>
 <link rel="stylesheet" href="styles.css"/>
 <script src="https://cdn.jsdelivr.net/npm/proj4@2.15.0/dist/proj4.js"></script>
 </head>
 <body>
-<div id="shell">
+<div id="authGate" class="auth-gate">
+  <div class="auth-card">
+    <div class="auth-brand">Harpur Land Mapper</div>
+    <div class="auth-subtitle">Family land records</div>
+    <form id="loginForm" class="auth-form" autocomplete="on">
+      <label>Username
+        <input id="loginUsername" value="vineet" readonly autocomplete="username"/>
+      </label>
+      <label>PIN
+        <input id="loginPin" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="current-password" placeholder="Enter PIN" required/>
+      </label>
+      <div id="loginError" class="auth-error hidden" role="alert"></div>
+      <button id="loginButton" class="primary auth-submit" type="submit">Sign In</button>
+    </form>
+  </div>
+</div>
+<div id="shell" class="hidden">
   <header class="topbar">
     <div class="brand-wrap">
       <button id="hamburger" class="icon-btn hamburger" aria-label="Open menu">☰</button>
@@ -24,7 +40,7 @@
       <button class="nav-link" data-view="about">About</button>
     </nav>
 
-    <div class="version-pill">v7.5</div>
+    <div class="version-pill">v7.9</div>
   </header>
 
   <div id="mobileBackdrop" class="mobile-backdrop hidden"></div>
@@ -43,16 +59,20 @@
     <section id="view-saved" class="view active">
       <div class="saved-layout">
         <aside class="master-pane">
-          <div class="pane-title-row">
-            <div>
-              <h2>Family Plots</h2>
-              <div class="family-context" data-family-context>Family</div>
-              <div id="savedCount" class="muted">Loading…</div>
+          <div class="master-fixed">
+            <div class="pane-title-row">
+              <div>
+                <h2>Family Plots</h2>
+                <div class="family-context" data-family-context>Family</div>
+                <div id="savedCount" class="muted">Loading…</div>
+              </div>
+              <div class="pane-title-actions">
+                <button id="fitAllSaved" class="secondary compact">Fit all</button>
+                <button id="savedSidebarCollapse" class="sidebar-collapse-btn" aria-label="Collapse Family Plots panel" title="Collapse panel">‹</button>
+              </div>
             </div>
-            <button id="fitAllSaved" class="secondary compact">Fit all</button>
-          </div>
 
-          <div class="filters">
+            <div class="filters">
             <input id="savedSearch" placeholder="Search plot / khata / owner / raiyat"/>
             <div class="survey-filter-block">
               <span class="filter-label">Survey</span>
@@ -82,11 +102,13 @@
               <label class="check"><input id="showSavedPins" type="checkbox" checked/> Pins</label>
             </div>
           </div>
+          </div>
 
           <div id="savedList" class="saved-list"></div>
         </aside>
 
         <section class="detail-map-pane">
+          <button id="savedSidebarOpen" class="saved-sidebar-open" aria-label="Open Family Plots panel" title="Open Family Plots">☰</button>
           <div id="savedMap" class="map"></div>
           <div class="map-caption">Satellite + labels • Saved pins • Irregular parcel shape when available • BBox fallback</div>
 
@@ -370,7 +392,7 @@
       <div class="about-wrap">
         <div class="about-card">
           <h1>Harpur Land Mapper</h1>
-          <div class="version-badge">Version 7.6</div>
+          <div class="version-badge">Version 7.9</div>
           <p>
             Family land-mapping application for browsing saved plots on Google Satellite
             and adding/verifying parcels from Bihar BhuNaksha.

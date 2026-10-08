@@ -2,6 +2,66 @@ proj4.defs('EPSG:32645','+proj=utm +zone=45 +datum=WGS84 +units=m +no_defs +type
 
 const $ = id => document.getElementById(id);
 
+
+/* ----------------------------- AUTHENTICATION ----------------------------- */
+let appStarted = false;
+
+function showLogin(message=''){
+  $('shell')?.classList.add('hidden');
+  $('authGate')?.classList.remove('hidden');
+  const error=$('loginError');
+  if(error){
+    error.textContent=message;
+    error.classList.toggle('hidden',!message);
+  }
+  setTimeout(()=>{ $('loginPin')?.focus(); },50);
+}
+
+function showAuthenticatedApp(){
+  $('authGate')?.classList.add('hidden');
+  $('shell')?.classList.remove('hidden');
+  if(!appStarted){
+    appStarted=true;
+    bootstrap();
+  }
+}
+
+async function checkExistingSession(){
+  try{
+    const r=await fetch('/api/auth/session',{credentials:'same-origin'});
+    const d=await r.json();
+    if(r.ok && d.authenticated){
+      showAuthenticatedApp();
+      return;
+    }
+  }catch(_){ }
+  showLogin();
+}
+
+$('loginForm')?.addEventListener('submit',async(event)=>{
+  event.preventDefault();
+  const pin=$('loginPin')?.value || '';
+  const button=$('loginButton');
+  const error=$('loginError');
+  if(error) error.classList.add('hidden');
+  if(button){ button.disabled=true; button.textContent='Signing in…'; }
+  try{
+    const r=await fetch('/api/auth/login',{
+      method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',
+      body:JSON.stringify({username:'vineet',pin})
+    });
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(d.error || 'Sign in failed');
+    if($('loginPin')) $('loginPin').value='';
+    showAuthenticatedApp();
+  }catch(err){
+    if(error){ error.textContent=err.message; error.classList.remove('hidden'); }
+    $('loginPin')?.select();
+  }finally{
+    if(button){ button.disabled=false; button.textContent='Sign In'; }
+  }
+});
+
 let appConfig = null;
 let googleLoaded = false;
 
@@ -21,6 +81,7 @@ let savedShowBBoxes = true;
 let savedShowPins = true;
 let savedSurvey = localStorage.getItem('harpurSavedSurvey') || '';
 let familyContextName = 'Family';
+let savedSidebarCollapsed = localStorage.getItem('harpurSavedSidebarCollapsed') === '1';
 
 // Mobile Saved Plots state
 let mobileSelectedPlotIds = new Set();
@@ -189,7 +250,7 @@ window.initGoogleMaps = async function(){
 
 
 function isMobileSavedMode(){
-  return window.matchMedia('(max-width: 900px)').matches;
+  return window.matchMedia('(max-width: 767px)').matches;
 }
 
 function showMobileToolbar(autoHide=true){
@@ -1498,9 +1559,40 @@ function setupPlotDetailsAccordions(){
 }
 setupPlotDetailsAccordions();
 
+
+function isTabletOrDesktopSavedMode(){
+  return window.matchMedia('(min-width: 768px)').matches;
+}
+
+function refreshSavedMapAfterSidebarResize(){
+  if(!savedMap || !window.google?.maps) return;
+  const center=savedMap.getCenter?.();
+  const zoom=savedMap.getZoom?.();
+  setTimeout(()=>{
+    google.maps.event.trigger(savedMap,'resize');
+    if(center) savedMap.setCenter(center);
+    if(Number.isFinite(zoom)) savedMap.setZoom(zoom);
+  },210);
+}
+
+function setSavedSidebarCollapsed(collapsed,{persist=true}={}){
+  savedSidebarCollapsed=!!collapsed;
+  const layout=document.querySelector('#view-saved .saved-layout');
+  layout?.classList.toggle('saved-sidebar-collapsed',savedSidebarCollapsed && isTabletOrDesktopSavedMode());
+  $('savedSidebarCollapse')?.setAttribute('aria-expanded',String(!savedSidebarCollapsed));
+  $('savedSidebarOpen')?.setAttribute('aria-expanded',String(!savedSidebarCollapsed));
+  if(persist) localStorage.setItem('harpurSavedSidebarCollapsed',savedSidebarCollapsed?'1':'0');
+  refreshSavedMapAfterSidebarResize();
+}
+
+$('savedSidebarCollapse')?.addEventListener('click',()=>setSavedSidebarCollapsed(true));
+$('savedSidebarOpen')?.addEventListener('click',()=>setSavedSidebarCollapsed(false));
+setSavedSidebarCollapsed(savedSidebarCollapsed,{persist:false});
+
 function syncResponsiveSavedChrome(){
   const mobile=isMobileSavedMode();
   const toolbar=$('mobileSavedToolbar');
+  document.querySelector('#view-saved .saved-layout')?.classList.toggle('saved-sidebar-collapsed',savedSidebarCollapsed && isTabletOrDesktopSavedMode());
   if(!mobile){
     clearTimeout(mobileToolbarTimer);
     mobileDrawerOpen=false;
@@ -1524,7 +1616,7 @@ function syncResponsiveSavedChrome(){
     if(activeSavedPlot) setTimeout(()=>focusSavedPlot(activeSavedPlot,false),30);
   }
 }
-const savedMobileMedia=window.matchMedia('(max-width:900px)');
+const savedMobileMedia=window.matchMedia('(max-width:767px)');
 if(savedMobileMedia.addEventListener) savedMobileMedia.addEventListener('change',()=>setTimeout(syncResponsiveSavedChrome,0));
 else if(savedMobileMedia.addListener) savedMobileMedia.addListener(()=>setTimeout(syncResponsiveSavedChrome,0));
 
@@ -1533,4 +1625,4 @@ function escapeHtml(s){
   return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
-bootstrap();
+checkExistingSession();

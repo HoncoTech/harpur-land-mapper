@@ -1,8 +1,8 @@
 {
-  "name": "harpur-land-mapper-v7.8-robust-contour",
-  "version": "7.8.0",
+  "name": "harpur-land-mapper-v7.9-auth-desktop-sidebar",
+  "version": "7.9.0",
   "private": true,
-  "description": "Map-first Harpur Land Mapper with CS/RS, reconstructed parcel shapes and map measurements.",
+  "description": "Map-first Harpur Land Mapper with CS/RS, PIN login, robust parcel reconstruction and tablet/desktop collapsible Family Plots panel.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

@@ -636,3 +636,94 @@ label{display:block;font-size:13px;font-weight:650;margin-top:10px}
   .details-panel-head{top:-12px;padding:10px 0 7px}
   .details-panel-head h2{font-size:22px}
 }
+
+/* V7.9 authentication gate */
+.auth-gate{
+  position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;
+  padding:20px;background:#f3f5f8;
+}
+.auth-card{
+  width:min(390px,100%);background:#fff;border:1px solid var(--border);border-radius:16px;
+  padding:28px;box-shadow:0 12px 38px rgba(0,0,0,.12);
+}
+.auth-brand{font-size:24px;line-height:1.15;font-weight:800;letter-spacing:-.02em}
+.auth-subtitle{margin-top:5px;color:var(--muted);font-size:13px}
+.auth-form{display:grid;gap:13px;margin-top:24px}
+.auth-form label{margin:0;font-size:13px;color:#475467}
+.auth-form input{margin-top:6px;min-height:46px;font-size:16px}
+.auth-form input[readonly]{background:#f7f8fa;color:#344054}
+.auth-submit{width:100%;min-height:46px;margin-top:4px}
+.auth-error{padding:9px 10px;border-radius:8px;background:#fef3f2;color:#b42318;font-size:13px;border:1px solid #fecdca}
+@media(max-width:560px){
+  .auth-gate{padding:16px;background:#fff;align-items:flex-start;padding-top:max(72px,12vh)}
+  .auth-card{border:0;box-shadow:none;padding:8px;width:100%;max-width:420px}
+  .auth-brand{font-size:26px}
+}
+
+/* V7.9 Family Plots panel: tablet + desktop only. */
+.pane-title-actions{display:flex;align-items:center;gap:6px}
+.sidebar-collapse-btn{
+  width:34px;height:34px;min-height:0;border:1px solid #cfd4dc;border-radius:8px;background:#fff;
+  font-size:25px;line-height:28px;padding:0;color:#344054;font-weight:500;
+}
+.sidebar-collapse-btn:hover,.saved-sidebar-open:hover{background:#f3f5f7}
+.saved-sidebar-open{
+  display:none;position:absolute;z-index:8;top:12px;left:12px;width:42px;height:42px;min-height:0;
+  align-items:center;justify-content:center;border:1px solid #cfd4dc;border-radius:10px;background:rgba(255,255,255,.97);
+  box-shadow:var(--shadow);font-size:20px;padding:0;
+}
+
+@media(min-width:768px){
+  #view-saved .saved-layout{
+    height:calc(100vh - 64px);display:grid;grid-template-columns:360px minmax(0,1fr);
+    transition:grid-template-columns .18s ease;
+  }
+  #view-saved .master-pane{
+    display:flex!important;flex-direction:column;min-width:0;min-height:0;padding:0;overflow:hidden;
+    background:var(--surface);border-right:1px solid var(--border);
+  }
+  #view-saved .master-fixed{
+    flex:0 0 auto;padding:14px 14px 10px;background:#fff;border-bottom:1px solid #eceff2;
+  }
+  #view-saved .master-fixed .pane-title-row{margin-bottom:10px}
+  #view-saved .master-fixed .filters{margin-bottom:0;gap:7px}
+  #view-saved .master-fixed .survey-filter-block{margin-top:5px}
+  #view-saved .master-fixed .saved-display-controls{padding-top:4px;gap:9px}
+  #view-saved #savedList.saved-list{
+    flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;
+    overscroll-behavior:contain;padding:10px 14px 24px;
+  }
+  #view-saved .detail-map-pane{min-width:0;height:100%;position:relative}
+  #view-saved .saved-layout.saved-sidebar-collapsed{grid-template-columns:0 minmax(0,1fr)}
+  #view-saved .saved-layout.saved-sidebar-collapsed .master-pane{
+    visibility:hidden;border-right:0;pointer-events:none;
+  }
+  #view-saved .saved-layout.saved-sidebar-collapsed .saved-sidebar-open{display:flex}
+}
+
+/* iPad/tablet widths use the desktop Family Plots master/map experience,
+   while the rest of the app can keep its existing mobile/tablet navigation. */
+@media(min-width:768px) and (max-width:900px){
+  #view-saved.active{position:fixed;inset:64px 0 0 0;height:auto;z-index:20;background:#fff}
+  #view-saved .saved-layout{height:100%;grid-template-columns:330px minmax(0,1fr)}
+  #view-saved .saved-layout.saved-sidebar-collapsed{grid-template-columns:0 minmax(0,1fr)}
+  #view-saved .detail-map-pane{position:relative;inset:auto;height:100%;min-height:0;order:initial}
+  #view-saved #savedMap{height:100%}
+  #view-saved .map-caption{display:block!important}
+  #view-saved .selected-summary{display:flex!important}
+  #view-saved .selected-summary.hidden{display:none!important}
+  #view-saved .mobile-only{display:none!important}
+  #view-saved .master-pane input,
+  #view-saved .master-pane select,
+  #view-saved .master-pane button{font-size:13px;min-height:36px}
+  #view-saved .master-pane .sidebar-collapse-btn{min-height:0}
+  #view-saved .master-fixed{padding:12px 12px 9px}
+  #view-saved #savedList.saved-list{padding:9px 12px 20px}
+}
+
+@media(max-width:767px){
+  .saved-sidebar-open,.sidebar-collapse-btn{display:none!important}
+}
+@media(min-width:768px) and (max-width:900px){
+  #view-saved .master-pane{order:initial;border-top:0}
+}

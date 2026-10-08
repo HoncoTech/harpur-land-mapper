@@ -1,30 +1,8 @@
-## Harpur Land Mapper V7.1
+# Deployment - v7.9
 
-Map-first Add Plot UI with dynamic CS/RS loading and ownership/land-type fields.
+1. Deploy the full application directory.
+2. Keep `harpur.sqlite` from this package; it contains the rebuilt CS/RS data and the pre-populated hashed ADMIN credential.
+3. Set `GOOGLE_MAPS_API_KEY` in the environment.
+4. Start with `npm start`.
 
-# Deployment — V6.0
-
-## Render
-
-Use:
-- Runtime: Node
-- Node version: 22.22.0
-- Build command: `npm install`
-- Start command: `npm start`
-- Environment variable: `GOOGLE_MAPS_API_KEY`
-
-The Saved Plots landing page does not call BhuNaksha, so family browsing is independent of BhuNaksha/WMS availability.
-
-## SQLite on Render Free
-
-The included `harpur.sqlite` is a seed database committed with the application.
-
-Runtime edits can still be lost when a free Render instance is replaced/redeployed because its filesystem is ephemeral.
-
-For permanent multi-user editing, later move to:
-- paid persistent disk + SQLite, or
-- hosted PostgreSQL.
-
-
-### v7.8
-Parcel reconstruction now uses the robust outer-contour tracer. No deployment configuration changes are required.
+The PIN itself is not stored in source or SQLite. Login sessions are server-memory sessions and will require sign-in again after a server restart/redeploy.
