@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Harpur Land Mapper V7.9</title>
+<title>Harpur Land Mapper V7.10</title>
 <link rel="stylesheet" href="styles.css"/>
 <script src="https://cdn.jsdelivr.net/npm/proj4@2.15.0/dist/proj4.js"></script>
 </head>
@@ -40,7 +40,11 @@
       <button class="nav-link" data-view="about">About</button>
     </nav>
 
-    <div class="version-pill">v7.9</div>
+    <div class="topbar-user desktop-tablet-user">
+      <span class="topbar-user-name">vineet</span>
+      <span class="topbar-user-role">Admin</span>
+      <button id="desktopLogout" class="topbar-logout" type="button">Logout</button>
+    </div>
   </header>
 
   <div id="mobileBackdrop" class="mobile-backdrop hidden"></div>
@@ -52,6 +56,13 @@
     <button class="mobile-nav-link active" data-view="saved">Family Plots</button>
     <button class="mobile-nav-link" data-view="add">Add Family Plot</button>
     <button class="mobile-nav-link" data-view="about">About</button>
+    <div class="mobile-menu-account">
+      <div class="mobile-user-meta">
+        <b>vineet</b>
+        <span>Admin</span>
+      </div>
+      <button id="mobileLogout" class="mobile-logout" type="button">Logout</button>
+    </div>
   </aside>
 
   <main id="content">
@@ -110,7 +121,6 @@
         <section class="detail-map-pane">
           <button id="savedSidebarOpen" class="saved-sidebar-open" aria-label="Open Family Plots panel" title="Open Family Plots">☰</button>
           <div id="savedMap" class="map"></div>
-          <div class="map-caption">Satellite + labels • Saved pins • Irregular parcel shape when available • BBox fallback</div>
 
           <div id="selectedSummary" class="selected-summary hidden">
             <div>
@@ -392,7 +402,7 @@
       <div class="about-wrap">
         <div class="about-card">
           <h1>Harpur Land Mapper</h1>
-          <div class="version-badge">Version 7.9</div>
+          <div class="version-badge">Version 7.10</div>
           <p>
             Family land-mapping application for browsing saved plots on Google Satellite
             and adding/verifying parcels from Bihar BhuNaksha.

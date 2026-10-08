@@ -1,23 +1,25 @@
-# Harpur Land Mapper v7.9
+# Harpur Land Mapper v7.10
 
-Map-first family land mapper for Harpur with CS/RS survey workflows.
+Map-first Harpur family land mapper with RS/CS survey support, BhuNaksha parcel reconstruction, saved family plots, and fixed admin PIN authentication.
 
-## v7.9 changes
+## v7.10 changes
 
-- Fixed pre-populated ADMIN user: `vineet`.
-- PIN sign-in on phone, iPad/tablet, and desktop. The database stores only a salted one-way scrypt hash; the plain PIN is not stored in source or SQLite.
-- Authentication uses an HttpOnly SameSite session cookie.
-- Family Plots left panel is collapsible on iPad/tablet and desktop (>= 768 px).
-- When collapsed, the map expands and a hamburger control reopens the panel without clearing survey, filters, selection, or map position.
-- Family Plots header/search/filter/display controls stay fixed; only the plot list scrolls.
-- Phone Saved Plots behavior remains unchanged.
-- Uses the supplied rebuilt database with 52 CS and 48 RS records.
+- Session idle timeout changed to **1 hour**.
+- Added **Logout** for tablet/desktop in the top-right header.
+- Added **Logout** for phone/mobile inside the hamburger menu.
+- Logout invalidates the server session and returns to the PIN sign-in screen.
+- Expired authenticated API sessions return the user to sign-in with an expiry message.
+- Removed the saved-map helper banner: `Satellite + labels • Saved pins • Irregular parcel shape when available • BBox fallback`.
+- Keeps the v7.9 tablet/desktop collapsible Family Plots sidebar and fixed controls / scrolling plot-list layout.
 
-## Run
+## Authentication
 
-```bash
-npm install
-npm start
-```
+- Fixed user: `vineet`
+- Role: `ADMIN`
+- PIN is verified against the pre-populated salted scrypt hash in SQLite.
+- The plain PIN is not stored in the application source or SQLite.
+- Sessions are stored in server memory and expire after 1 hour of inactivity. A server restart/redeploy also ends active sessions.
 
-Set `GOOGLE_MAPS_API_KEY` in the deployment environment when available.
+## Data
+
+The package preserves the pre-populated RS/CS SQLite database from v7.9.

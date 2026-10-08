@@ -76,11 +76,6 @@ label{display:block;font-size:13px;font-weight:650;margin-top:10px}
 
 .detail-map-pane,.add-map-pane{position:relative;min-width:0}
 .map{width:100%;height:100%;background:#e8eaed}
-.map-caption{
-  position:absolute;top:12px;left:50%;transform:translateX(-50%);
-  background:rgba(255,255,255,.95);border-radius:8px;padding:7px 11px;box-shadow:var(--shadow);
-  z-index:3;font-size:12px;text-align:center;
-}
 .selected-summary{
   position:absolute;left:16px;right:16px;bottom:16px;background:rgba(255,255,255,.97);
   border:1px solid var(--border);border-radius:10px;padding:11px 13px;box-shadow:var(--shadow);
@@ -121,6 +116,7 @@ label{display:block;font-size:13px;font-weight:650;margin-top:10px}
 .mobile-menu{
   position:fixed;top:0;bottom:0;left:0;width:280px;background:#fff;z-index:90;
   transform:translateX(-102%);transition:transform .2s ease;padding:16px;box-shadow:var(--shadow);
+  display:flex;flex-direction:column;
 }
 .mobile-menu.open{transform:translateX(0)}
 .mobile-menu-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
@@ -329,7 +325,6 @@ label{display:block;font-size:13px;font-weight:650;margin-top:10px}
     inset:0;
   }
   #view-saved #savedMap{height:100%}
-  #view-saved .map-caption,
   #view-saved .selected-summary{display:none!important}
   .mobile-only{display:block}
   .mobile-saved-toolbar{display:flex}
@@ -637,7 +632,7 @@ label{display:block;font-size:13px;font-weight:650;margin-top:10px}
   .details-panel-head h2{font-size:22px}
 }
 
-/* V7.9 authentication gate */
+/* V7.10 authentication gate */
 .auth-gate{
   position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;
   padding:20px;background:#f3f5f8;
@@ -660,7 +655,33 @@ label{display:block;font-size:13px;font-weight:650;margin-top:10px}
   .auth-brand{font-size:26px}
 }
 
-/* V7.9 Family Plots panel: tablet + desktop only. */
+
+/* V7.10 signed-in user / logout controls */
+.desktop-tablet-user{
+  display:flex;align-items:center;gap:7px;margin-left:12px;white-space:nowrap;
+}
+.topbar-user-name{font-size:13px;font-weight:750;color:#344054}
+.topbar-user-role{font-size:11px;color:var(--muted);padding:3px 7px;border:1px solid var(--border);border-radius:999px}
+.topbar-logout{
+  border:1px solid #cfd4dc;background:#fff;border-radius:8px;padding:7px 10px;font-size:13px;font-weight:700;color:#344054;
+}
+.topbar-logout:hover,.mobile-logout:hover{background:#f3f5f7}
+.mobile-menu-account{
+  margin-top:auto;padding-top:16px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;
+}
+.mobile-user-meta{display:flex;flex-direction:column;gap:2px;font-size:13px}
+.mobile-user-meta span{font-size:11px;color:var(--muted)}
+.mobile-logout{
+  border:1px solid #cfd4dc;background:#fff;border-radius:8px;padding:8px 11px;font-size:13px;font-weight:700;color:#344054;
+}
+@media(max-width:767px){
+  .desktop-tablet-user{display:none}
+}
+@media(min-width:768px){
+  .mobile-menu-account{display:none}
+}
+
+/* V7.10 Family Plots panel: tablet + desktop only. */
 .pane-title-actions{display:flex;align-items:center;gap:6px}
 .sidebar-collapse-btn{
   width:34px;height:34px;min-height:0;border:1px solid #cfd4dc;border-radius:8px;background:#fff;
@@ -709,7 +730,6 @@ label{display:block;font-size:13px;font-weight:650;margin-top:10px}
   #view-saved .saved-layout.saved-sidebar-collapsed{grid-template-columns:0 minmax(0,1fr)}
   #view-saved .detail-map-pane{position:relative;inset:auto;height:100%;min-height:0;order:initial}
   #view-saved #savedMap{height:100%}
-  #view-saved .map-caption{display:block!important}
   #view-saved .selected-summary{display:flex!important}
   #view-saved .selected-summary.hidden{display:none!important}
   #view-saved .mobile-only{display:none!important}

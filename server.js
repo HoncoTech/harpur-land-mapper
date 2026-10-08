@@ -245,7 +245,7 @@ app.set('trust proxy', 1);
    The deployed database contains a pre-populated ADMIN user. The PIN itself is
    never stored in source or SQLite; only a salted scrypt hash is persisted. */
 const SESSION_COOKIE = 'harpur_session';
-const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
+const SESSION_TTL_MS = 60 * 60 * 1000;
 const sessions = new Map();
 const loginFailures = new Map();
 

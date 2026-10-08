@@ -5,6 +5,7 @@ const $ = id => document.getElementById(id);
 
 /* ----------------------------- AUTHENTICATION ----------------------------- */
 let appStarted = false;
+const nativeFetch = window.fetch.bind(window);
 
 function showLogin(message=''){
   $('shell')?.classList.add('hidden');
@@ -25,6 +26,28 @@ function showAuthenticatedApp(){
     bootstrap();
   }
 }
+
+async function logout(){
+  const buttons=[$('desktopLogout'),$('mobileLogout')].filter(Boolean);
+  buttons.forEach(b=>{ b.disabled=true; });
+  try{
+    await fetch('/api/auth/logout',{method:'POST',credentials:'same-origin'});
+  }catch(_){ /* Cookie/session will still be treated as logged out on next auth check. */ }
+  finally{
+    closeMobileMenu();
+    buttons.forEach(b=>{ b.disabled=false; });
+    showLogin();
+  }
+}
+
+window.fetch = async function(input, init){
+  const response = await nativeFetch(input, init);
+  const url = typeof input === 'string' ? input : (input?.url || '');
+  if(response.status === 401 && url.includes('/api/') && !url.includes('/api/auth/')){
+    showLogin('Session expired after 1 hour of inactivity. Sign in again.');
+  }
+  return response;
+};
 
 async function checkExistingSession(){
   try{
@@ -172,6 +195,8 @@ document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click'
 $('hamburger').onclick = openMobileMenu;
 $('closeMenu').onclick = closeMobileMenu;
 $('mobileBackdrop').onclick = closeMobileMenu;
+$('desktopLogout')?.addEventListener('click',logout);
+$('mobileLogout')?.addEventListener('click',logout);
 
 /* ----------------------------- GOOGLE SETUP ----------------------------- */
 async function loadAppConfig(){
